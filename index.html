@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AP階層アポイントKPI管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #FAFAFF;
+    --panel: #FFFFFF;
+    --panel-2: #F6F7FD;
+    --line: #E7E9F7;
+    --line-soft: #EFF1FB;
+    --track: #EDEFFA;
+    --teal: #00CFC1;
+    --teal-dim: #00B6A9;
+    --teal-glow: rgba(0,207,193,0.14);
+    --gold: #FF6FA8;
+    --gold-glow: rgba(255,111,168,0.14);
+    --text: #23264A;
+    --text-dim: #6B6F98;
+    --text-faint: #A6A9CB;
+    --ok: #22C55E;
+    --warn: #FFAB2E;
+    --bad: #FF5A6E;
+    --radius: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(900px 460px at 92% -8%, rgba(0,207,193,0.10), transparent 60%),
+      radial-gradient(700px 420px at 4% 8%, rgba(255,111,168,0.09), transparent 60%),
+      radial-gradient(800px 500px at 50% 115%, rgba(255,171,46,0.07), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1, h2, h3, .pop-display{ font-family:"Kosugi Maru","Zen Kaku Gothic New",sans-serif; }
+  .app{ display:flex; flex-direction:column; min-height:100vh; }
+
+  /* ---------- HEADER ---------- */
+  .hero{
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:18px 40px 0;
+    position:sticky; top:0; z-index:20;
+    box-shadow:0 6px 24px -18px rgba(35,38,74,0.25);
+  }
+  .hero-top{
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding-bottom:14px;
+  }
+  .brand{ display:flex; flex-direction:column; gap:1px; margin-right:auto; }
+  .brand .eyebrow{
+    font-size:10.5px; letter-spacing:.16em; color:var(--teal-dim); text-transform:uppercase; font-weight:700;
+  }
+  .brand h1{ margin:1px 0 0; font-size:20px; font-weight:700; letter-spacing:.01em; color:var(--text); }
+
+  .month-nav{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:999px;
+    padding:6px 8px; display:flex; align-items:center; gap:4px;
+  }
+  .month-nav button{
+    width:28px; height:28px; border-radius:50%; border:none;
+    background:transparent; color:var(--text-dim); cursor:pointer; font-size:15px;
+    display:flex; align-items:center; justify-content:center; transition:.15s;
+  }
+  .month-nav button:hover{ background:var(--teal-glow); color:var(--teal-dim); }
+  .month-label{ font-size:14px; font-weight:700; letter-spacing:.02em; padding:0 4px; white-space:nowrap; }
+  .month-label .yr{ color:var(--text-faint); font-weight:600; font-size:10.5px; margin-right:3px;}
+
+  .shared-flag{
+    display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--teal-dim); font-weight:700;
+    background:var(--teal-glow); border:1px solid rgba(0,207,193,0.35); border-radius:999px;
+    padding:6px 12px; white-space:nowrap;
+  }
+  .status-cluster{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .save-flag{ font-size:11px; color:var(--text-faint); display:flex; align-items:center; gap:6px; white-space:nowrap; font-weight:600; }
+  .save-flag .pip{ width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 6px var(--ok); }
+
+  .util-btn{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text-dim);
+    border-radius:999px; padding:8px 14px; font-size:12px; font-weight:700; cursor:pointer;
+    font-family:inherit; transition:.15s; white-space:nowrap;
+  }
+  .util-btn:hover{ border-color:var(--teal); color:var(--teal-dim); background:var(--teal-glow); }
+  .util-btn.danger:hover{ border-color:var(--bad); color:var(--bad); background:rgba(255,90,110,0.08); }
+
+  .tabs-top{
+    display:flex; gap:4px; overflow-x:auto; padding-bottom:0; margin-top:2px;
+    scrollbar-width:none;
+  }
+  .tabs-top::-webkit-scrollbar{ display:none; }
+  .tab-btn{
+    display:flex; align-items:center; gap:8px; padding:12px 18px; border-radius:12px 12px 0 0;
+    border:none; background:transparent; color:var(--text-faint);
+    font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit;
+    transition:.15s; border-bottom:3px solid transparent;
+  }
+  .tab-btn .ic{ font-size:13px; }
+  .tab-btn:hover{ color:var(--text); background:var(--panel-2); }
+  .tab-btn.active{ color:var(--teal-dim); border-bottom-color:var(--teal); background:var(--teal-glow); }
+
+  /* ---------- member switcher (inside 個別入力 tab) ---------- */
+  .switcher-card{ display:flex; flex-wrap:wrap; gap:14px 22px; align-items:flex-end; }
+  .switcher-row{ display:flex; align-items:center; gap:10px; }
+  .switcher-field{ display:flex; flex-direction:column; gap:5px; }
+  .switcher-field label{ font-size:10.5px; color:var(--text-faint); font-weight:700; letter-spacing:.05em; }
+  .switcher-field select{
+    appearance:none; -webkit-appearance:none;
+    background:var(--panel-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%236B6F98"/></svg>') no-repeat right 14px center;
+    border:1.5px solid var(--line); border-radius:12px; color:var(--text); font-weight:700;
+    font-size:14px; padding:10px 34px 10px 14px; font-family:inherit; min-width:220px; cursor:pointer;
+  }
+  .switcher-field select:focus{ outline:none; border-color:var(--teal); }
+  .icon-btn{
+    width:38px; height:38px; border-radius:12px; border:1.5px solid var(--line); background:var(--panel);
+    color:var(--text-faint); cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;
+    transition:.15s;
+  }
+  .icon-btn.danger:hover{ border-color:var(--bad); color:var(--bad); background:rgba(255,90,110,0.08); }
+  .add-row{ gap:8px; }
+  .add-row input{
+    background:var(--panel-2); border:1.5px solid var(--line); border-radius:12px;
+    color:var(--text); padding:9px 14px; font-size:13px; font-family:inherit; width:170px;
+  }
+  .add-row input:focus{ outline:none; border-color:var(--teal); }
+  .pop-btn{
+    background:var(--teal); border:none; color:#043B36; font-weight:800;
+    border-radius:12px; padding:9px 16px; cursor:pointer; font-size:13px; font-family:inherit;
+    transition:.15s; box-shadow:0 6px 16px -8px rgba(0,207,193,0.6);
+  }
+  .pop-btn:hover{ background:var(--teal-dim); transform:translateY(-1px); }
+
+  /* ---------- MAIN ---------- */
+  .main{ flex:1; padding:28px 40px 60px; max-width:1180px; width:100%; margin:0 auto; }
+  .topbar{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;}
+  .topbar h2{ margin:0; font-size:21px; font-weight:700; color:var(--text); }
+  .topbar .desc{ color:var(--text-dim); font-size:12.5px; margin-top:2px; }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line); border-radius:18px; padding:22px 24px; margin-bottom:20px;
+    box-shadow:0 10px 26px -20px rgba(35,38,74,0.35);
+  }
+  .card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px; }
+  .card-head h3{ margin:0; font-size:14.5px; font-weight:700; letter-spacing:.01em; color:var(--text); }
+  .card-head .tag{ font-size:10.5px; color:var(--text-faint); letter-spacing:.06em; text-transform:uppercase; font-weight:700; }
+
+  /* overview strip */
+  .overview-grid{ display:flex; flex-direction:column; gap:10px; }
+  .ov-row{
+    display:grid; grid-template-columns:130px 1fr 96px 150px; gap:16px; align-items:center;
+    padding:11px 14px; border-radius:14px; background:var(--panel-2); border:1.5px solid transparent;
+    cursor:pointer; transition:.13s;
+  }
+  .ov-row:hover{ border-color:var(--line); }
+  .ov-row.active{ border-color:var(--teal); background:var(--teal-glow); }
+  .ov-name{ font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:6px; color:var(--text); }
+  .ov-name .sm{ display:block; font-size:10.5px; font-weight:500; color:var(--text-dim); margin-top:1px;}
+  .team-chip{
+    font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.02em;
+    flex:none;
+  }
+  .bar-track{ height:9px; background:var(--track); border-radius:6px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:6px; transition:width .4s ease; }
+  .ov-num{ font-size:12.5px; text-align:right; color:var(--text-dim); }
+  .ov-num b{ color:var(--text); font-size:14px; }
+  .strip{ display:flex; gap:3px; justify-content:flex-end; }
+  .strip .cell{ width:15px; height:22px; border-radius:4px; background:var(--track); border:none; position:relative; overflow:hidden; }
+  .strip .cell[data-empty="1"]{ background:transparent; border:1px dashed var(--line); }
+  .strip .cell.now{ box-shadow:0 0 0 2px var(--teal); }
+
+  /* KPI summary cards */
+  .kpi-pair{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  .kpi-box{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:18px 20px; box-shadow:0 10px 26px -20px rgba(35,38,74,0.35); }
+  .kpi-box .lbl{ font-size:12px; color:var(--text-dim); font-weight:700; margin-bottom:10px; }
+  .kpi-nums{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .kpi-nums .actual{ font-size:32px; font-weight:800; letter-spacing:-.01em; }
+  .kpi-nums .slash{ color:var(--text-faint); font-size:20px; }
+  .kpi-meta{ display:flex; gap:16px; margin-top:12px; }
+  .kpi-meta div{ font-size:11px; color:var(--text-faint); font-weight:600; }
+  .kpi-meta b{ display:block; font-size:14px; color:var(--text); margin-top:2px; font-weight:700; }
+  .target-input{
+    width:64px; background:var(--panel-2); border:1.5px solid var(--line); border-radius:8px;
+    color:var(--teal-dim); font-weight:800; font-size:13px; text-align:center; padding:5px 2px;
+    font-family:inherit;
+  }
+  .target-input:focus{ outline:none; border-color:var(--teal); }
+  .kpi-box .bar-track{ margin-top:14px; height:7px; }
+
+  /* matrix */
+  table.matrix{ width:100%; border-collapse:collapse; }
+  table.matrix th, table.matrix td{ padding:9px 10px; text-align:center; font-size:13px; }
+  table.matrix thead th{ color:var(--text-dim); font-weight:700; font-size:11.5px; border-bottom:2px solid var(--line-soft); letter-spacing:.03em; }
+  table.matrix thead th:first-child{ text-align:left; }
+  table.matrix tbody th{ text-align:left; font-weight:700; color:var(--text); font-size:12.5px; border-right:2px solid var(--line-soft); }
+  table.matrix tbody tr:not(:last-child) td, table.matrix tbody tr:not(:last-child) th{ border-bottom:1px solid var(--line-soft); }
+  table.matrix input{
+    width:56px; background:var(--panel-2); border:1.5px solid var(--line); border-radius:8px;
+    color:var(--text); font-weight:700; font-size:13px; text-align:center; padding:6px 2px; font-family:inherit;
+  }
+  table.matrix input:focus{ outline:none; border-color:var(--teal); background:var(--teal-glow); }
+  table.matrix .rowtotal, table.matrix .coltotal{ color:var(--gold); font-weight:800; }
+  table.matrix tfoot th, table.matrix tfoot td{ padding-top:11px; border-top:2px solid var(--line-soft); font-weight:800; color:var(--gold); }
+
+  .note{ font-size:11px; color:var(--text-faint); margin-top:12px; line-height:1.6; }
+  .note b{ color:var(--text-dim); }
+
+  .empty-state{ text-align:center; padding:60px 20px; color:var(--text-dim); }
+  .empty-state h3{ color:var(--text); font-size:16px; }
+
+  /* ---------- bulk target editing tab ---------- */
+  .bulk-toolbar{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  @media (max-width: 900px){ .bulk-toolbar{ grid-template-columns:1fr; } }
+  .bulk-apply-box{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px 18px; box-shadow:0 10px 26px -20px rgba(35,38,74,0.35); }
+  .bulk-apply-box .lbl{ font-size:12px; color:var(--text-dim); font-weight:700; margin-bottom:10px; }
+  .bulk-apply-row{ display:flex; gap:8px; align-items:center; }
+  .bulk-apply-row input[type="number"]{
+    width:76px; background:var(--panel-2); border:1.5px solid var(--line); border-radius:10px;
+    color:var(--teal-dim); font-weight:800; font-size:14px; text-align:center; padding:8px 4px; font-family:inherit;
+  }
+  .bulk-apply-row input[type="number"]:focus{ outline:none; border-color:var(--teal); }
+  .bulk-apply-row button{
+    background:var(--teal); border:none; color:#043B36; font-weight:800;
+    border-radius:10px; padding:8px 14px; cursor:pointer; font-size:12.5px; font-family:inherit; white-space:nowrap;
+  }
+  .bulk-apply-row button:hover{ background:var(--teal-dim); }
+  .bulk-apply-hint{ font-size:10.5px; color:var(--text-faint); margin-top:8px; }
+
+  .bulk-select-bar{ display:flex; align-items:center; gap:14px; margin-bottom:12px; font-size:12px; color:var(--text-dim); }
+  .bulk-select-bar a{ color:var(--teal-dim); cursor:pointer; text-decoration:none; font-weight:700; }
+  .bulk-select-bar a:hover{ text-decoration:underline; }
+
+  table.bulk-table{ width:100%; border-collapse:collapse; }
+  table.bulk-table th, table.bulk-table td{ padding:10px 10px; text-align:left; font-size:13px; vertical-align:middle; }
+  table.bulk-table thead th{ color:var(--text-dim); font-weight:700; font-size:11px; border-bottom:2px solid var(--line-soft); letter-spacing:.03em; text-transform:uppercase; }
+  table.bulk-table tbody tr:not(:last-child) td{ border-bottom:1px solid var(--line-soft); }
+  table.bulk-table tbody tr:hover{ background:var(--panel-2); }
+  table.bulk-table input[type="checkbox"]{ width:15px; height:15px; accent-color:var(--teal); cursor:pointer; }
+  table.bulk-table input[type="number"]{
+    width:66px; background:var(--panel-2); border:1.5px solid var(--line); border-radius:8px;
+    color:var(--teal-dim); font-weight:800; font-size:13px; text-align:center; padding:6px 2px; font-family:inherit;
+  }
+  table.bulk-table input[type="number"]:focus{ outline:none; border-color:var(--teal); background:var(--teal-glow); }
+  table.bulk-table .ref{ color:var(--text-faint); font-size:11.5px; }
+  table.bulk-table .nm-cell{ font-weight:700; display:flex; align-items:center; gap:8px; }
+
+  /* ---------- team assignment tab ---------- */
+  .team-board{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width: 900px){ .team-board{ grid-template-columns:1fr; } }
+  .team-col{
+    background:var(--panel-2); border:1px solid var(--line-soft); border-radius:14px; padding:16px;
+    min-height:180px; transition:border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+  }
+  .team-col.dragover{
+    border-color:var(--teal); background:var(--teal-glow); transform:scale(1.012);
+    box-shadow:0 0 0 1px rgba(0,207,193,0.35), 0 10px 26px -12px rgba(0,207,193,0.45);
+  }
+  .team-col-head{ display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .team-swatch{ width:11px; height:11px; border-radius:4px; flex:none; }
+  .team-col-head input.team-name{
+    background:transparent; border:none; border-bottom:1px dashed var(--line); color:var(--text);
+    font-size:14px; font-weight:800; font-family:inherit; padding:2px 0; width:100%;
+  }
+  .team-col-head input.team-name:focus{ outline:none; border-color:var(--teal); }
+  .team-count{ font-size:10.5px; color:var(--text-faint); margin-left:auto; flex:none; transition:color .15s ease; }
+  .team-count.bump{ color:var(--teal); }
+  .leader-row{ font-size:11px; color:var(--text-dim); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .leader-row input.leader-name{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; color:var(--teal);
+    font-family:inherit; font-size:11.5px; font-weight:700; padding:3px 7px; width:80px;
+  }
+  .leader-row input.leader-name:focus{ outline:none; border-color:var(--teal); }
+  .drop-zone{ min-height:80px; display:flex; flex-direction:column; gap:8px; position:relative; }
+  .member-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:9px 11px;
+    display:flex; align-items:center; gap:8px; cursor:grab; font-size:12.5px; font-weight:600;
+    transition:box-shadow .18s ease, border-color .18s ease;
+    will-change:transform;
+  }
+  .member-card:active{ cursor:grabbing; }
+  .member-card:hover{ border-color:var(--line); box-shadow:0 6px 16px -8px rgba(35,38,74,0.18); }
+  .member-card.dragging{
+    opacity:.4; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);
+    transform:scale(.96) rotate(-1.2deg);
+  }
+  .member-card.card-pop-in{ animation:cardPopIn .38s cubic-bezier(.2,.9,.3,1.3) both; }
+  .member-card.card-landed{ animation:cardLanded .55s ease both; }
+  @keyframes cardPopIn{
+    0%{ opacity:0; transform:scale(.82) translateY(-6px); }
+    70%{ opacity:1; transform:scale(1.03) translateY(0); }
+    100%{ opacity:1; transform:scale(1) translateY(0); }
+  }
+  @keyframes cardLanded{
+    0%{ box-shadow:0 0 0 2px var(--teal), 0 8px 18px -6px rgba(0,207,193,.55); background:var(--teal-glow); }
+    100%{ box-shadow:0 0 0 0 rgba(0,0,0,0); background:var(--panel); }
+  }
+  .member-card .rate-pip{ width:7px; height:7px; border-radius:50%; flex:none; }
+  .member-card .nm{ flex:1; }
+  .move-btns{ display:flex; gap:3px; }
+  .move-btns button{
+    width:20px; height:20px; border-radius:5px; border:1px solid var(--line); background:var(--bg);
+    color:var(--text-faint); font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:transform .12s ease, color .12s ease, border-color .12s ease;
+  }
+  .move-btns button:hover{ color:var(--teal); border-color:var(--teal); transform:translateX(2px) scale(1.08); }
+  .drop-hint{
+    font-size:11px; color:var(--text-faint); text-align:center; padding:14px 4px; border:1px dashed var(--line);
+    border-radius:8px; transition:border-color .18s ease, color .18s ease;
+  }
+  .team-col.dragover .drop-hint{ border-color:var(--teal); color:var(--teal); }
+  @media (prefers-reduced-motion: reduce){
+    .member-card, .team-col, .move-btns button{ transition:none !important; animation:none !important; }
+  }
+
+  /* ---------- team progress tab ---------- */
+  .team-progress-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width: 900px){ .team-progress-grid{ grid-template-columns:1fr; } }
+  .tp-card{ background:linear-gradient(180deg, var(--panel-2), var(--panel)); border:1px solid var(--line-soft); border-radius:16px; padding:22px; }
+  .tp-head{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .tp-head h3{ margin:0; font-size:16px; font-weight:800; }
+  .tp-leader{ font-size:11px; color:var(--text-dim); margin-bottom:16px; }
+  .tp-big{ display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+  .tp-big .n{ font-size:34px; font-weight:800; }
+  .tp-big .d{ font-size:16px; color:var(--text-dim); font-weight:600; }
+  .tp-sub{ font-size:11.5px; color:var(--text-faint); margin-bottom:14px; }
+  .tp-members{ display:flex; flex-direction:column; gap:7px; margin-top:16px; border-top:1px solid var(--line-soft); padding-top:14px; }
+  .tp-mrow{ display:grid; grid-template-columns:76px 1fr 60px; align-items:center; gap:10px; font-size:12px; }
+  .tp-mrow .nm{ color:var(--text-dim); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tp-mrow .num{ text-align:right; color:var(--text-faint); }
+  .tp-compare{ display:flex; align-items:center; gap:2px; margin:20px 0 16px; border-radius:8px; overflow:hidden; height:10px; }
+  .tp-compare div{ height:100%; }
+
+  .praise-card{
+    display:flex; align-items:stretch; border-radius:18px; overflow:hidden;
+    box-shadow:0 10px 26px -20px rgba(35,38,74,0.35); margin-top:16px;
+  }
+  .praise-banner{
+    flex:none; width:112px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:18px 12px; text-align:center; color:#fff; position:relative;
+  }
+  .praise-banner .emoji{ font-size:36px; display:block; margin-bottom:6px; animation:emojiBounce .7s ease .1s both; }
+  @keyframes emojiBounce{
+    0%{ transform:scale(.5) rotate(-15deg); opacity:0; }
+    60%{ transform:scale(1.15) rotate(6deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0); }
+  }
+  .praise-banner .tier-label{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:800; opacity:.9; }
+  .praise-body{ flex:1; padding:18px 22px; background:var(--panel-2); display:flex; flex-direction:column; justify-content:center; gap:12px; }
+  .praise-body p{ margin:0; font-size:13.5px; line-height:1.75; color:var(--text); font-weight:600; }
+  .praise-body .stat-row{ display:flex; gap:10px; }
+  .praise-stat{ flex:none; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:7px 14px; text-align:center; }
+  .praise-stat .v{ font-size:16px; font-weight:800; color:var(--text); display:block; }
+  .praise-stat .l{ font-size:9.5px; color:var(--text-faint); font-weight:700; margin-top:1px; white-space:nowrap; }
+  @media (max-width: 620px){
+    .praise-card{ flex-direction:column; }
+    .praise-banner{ width:100%; flex-direction:row; gap:10px; padding:14px 18px; }
+    .praise-banner .emoji{ margin-bottom:0; font-size:26px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .praise-banner .emoji{ animation:none !important; }
+  }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:5px; }
+
+  @media (max-width: 900px){
+    .hero{ padding:14px 18px 0; }
+    .hero-top{ gap:10px; }
+    .brand{ width:100%; }
+    .status-cluster{ width:100%; }
+    .main{ padding:20px; }
+    .ov-row{ grid-template-columns:100px 1fr 70px; }
+    .strip{ display:none; }
+    .kpi-pair{ grid-template-columns:1fr; }
+    .switcher-card{ flex-direction:column; align-items:stretch; }
+    .switcher-field select{ min-width:0; width:100%; }
+  }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="hero">
+    <div class="hero-top">
+      <div class="brand">
+        <span class="eyebrow">BridgeOne · AP専用</span>
+        <h1>アポKPI管理</h1>
+      </div>
+
+      <div class="month-nav">
+        <button id="prevMonth" aria-label="前月">‹</button>
+        <div class="month-label" id="monthLabel"><span class="yr">2026</span>07月</div>
+        <button id="nextMonth" aria-label="翌月">›</button>
+      </div>
+
+      <div class="status-cluster">
+        <span class="shared-flag">🔗 チーム共有</span>
+        <span class="save-flag"><span class="pip"></span><span id="saveFlag">保存済み</span></span>
+        <button class="util-btn" id="exportBtn">⬇ CSV出力</button>
+        <button class="util-btn" id="backupBtn">💾 全体バックアップ</button>
+        <button class="util-btn" id="restoreBtn">♻️ 復元</button>
+        <input type="file" id="restoreFile" accept="application/json" style="display:none;">
+        <button class="util-btn danger" id="resetBtn">この月をクリア</button>
+      </div>
+    </div>
+
+    <nav class="tabs-top" id="tabsNav">
+      <button class="tab-btn" data-tab="teamProgress"><span class="ic">▤</span>チーム別進捗</button>
+      <button class="tab-btn" data-tab="overview"><span class="ic">◎</span>チーム概況</button>
+      <button class="tab-btn" data-tab="detail"><span class="ic">✎</span>個別入力</button>
+      <button class="tab-btn" data-tab="teams"><span class="ic">⇄</span>チーム配置</button>
+      <button class="tab-btn" data-tab="targets"><span class="ic">🎯</span>目標一括設定 <span style="font-size:10px;opacity:.7;">🔒</span></button>
+    </nav>
+  </header>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="pageTitle">チーム概況</h2>
+        <div class="desc" id="pageDesc">役員以上アポ 達成率順 · タップして個別入力へ</div>
+      </div>
+    </div>
+
+    <div id="detailArea"></div>
+
+  </main>
+</div>
+
+
+<script>
+(function(){
+  // ▼▼▼ ここにデプロイしたApps ScriptのWebアプリURLを貼り付けてください ▼▼▼
+  // (「https://script.google.com/macros/s/.../exec」の形のURLです。セットアップ手順を参照)
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxMCfPgBzwCIyIa-GKPYu8a8rfjGUSZpzS8QzD_ZygG98rTpisliEqqLYLdqZ6rBtRv/exec";
+  // ▲▲▲ ここまで ▲▲▲
+
+  const DEFAULT_MEMBERS = ["力石","濱本","岩井","堀内","浅野","上清田","川上"];
+  const ROWS = ["新規オーナー","新規役員","既存オーナー","既存役員"];
+  const COLS = ["5億未満","5~10億","10億以上"];
+  const STRIP_MONTHS = 6;
+  const DEFAULT_TEAMS = [
+    { id:"team1", name:"辻チーム", leader:"辻", color:"var(--teal)" },
+    { id:"team2", name:"熊倉チーム", leader:"熊倉", color:"var(--gold)" }
+  ];
+
+  // Simple client-side lock for the 目標一括設定 tab. This is NOT real security — anyone
+  // opening dev tools can read this constant or bypass the check — it's meant only to stop
+  // casual/accidental access by teammates, not a determined bad actor. Ask Claude to change
+  // this passcode any time.
+  const TARGETS_PASSCODE = "1051";
+  let targetsUnlocked = false; // resets on every page load, so re-entry is required each visit
+
+  let members = [];
+  let teams = [];
+  let assignments = {}; // memberName -> teamId | null
+  let current = new Date();
+  current.setDate(1);
+  let activeMember = null;
+  let activeTab = "teamProgress";
+  let monthCache = {};
+  let saveTimer = null;
+  let dragMember = null;
+  let bulkSelected = null; // Set of member names selected for bulk-apply; null = not yet initialized
+
+  const $ = (id) => document.getElementById(id);
+
+  function monthKey(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+  function monthKeyOffset(d, offset){ const nd = new Date(d.getFullYear(), d.getMonth()+offset, 1); return monthKey(nd); }
+  function monthDisplay(d){ return { yr: d.getFullYear(), mo: String(d.getMonth()+1).padStart(2,"0") }; }
+
+  function emptyMemberData(){
+    const matrix = {};
+    ROWS.forEach(r=>{ matrix[r] = {}; COLS.forEach(c=> matrix[r][c] = 0); });
+    return { target1: 0, target2: 0, matrix };
+  }
+
+  function computeStats(md){
+    let total = 0, tenOku = 0;
+    const rowTotals = {};
+    const colTotals = {}; COLS.forEach(c=>colTotals[c]=0);
+    ROWS.forEach(r=>{
+      let rt = 0;
+      COLS.forEach(c=>{
+        const v = Number(md.matrix[r] && md.matrix[r][c] || 0);
+        rt += v; colTotals[c] += v; total += v;
+        if(c === "10億以上") tenOku += v;
+      });
+      rowTotals[r] = rt;
+    });
+    const target1 = Number(md.target1)||0, target2 = Number(md.target2)||0;
+    return {
+      actual1: total, actual2: tenOku,
+      remain1: target1-total, remain2: target2-tenOku,
+      rate1: target1>0 ? total/target1 : 0,
+      rate2: target2>0 ? tenOku/target2 : 0,
+      rowTotals, colTotals, target1, target2
+    };
+  }
+
+  function rateColor(rate){
+    if(rate >= 1) return "var(--ok)";
+    if(rate >= 0.6) return "var(--teal)";
+    if(rate >= 0.35) return "var(--warn)";
+    return "var(--bad)";
+  }
+
+  function teamOf(m){ return teams.find(t=>t.id === assignments[m]) || null; }
+
+  // ---------- storage (Google Sheets via Apps Script Web App) ----------
+  // Simple fetch wrapper with a couple of retries for transient network hiccups.
+  async function apiGet(type, params){
+    params = params || {};
+    const usp = new URLSearchParams(Object.assign({ type: type }, params));
+    const url = GAS_URL + "?" + usp.toString();
+    let lastErr;
+    for(let attempt=0; attempt<=2; attempt++){
+      try{
+        const res = await fetch(url);
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if(data && data.error) throw new Error(data.error);
+        return data;
+      }catch(e){
+        lastErr = e;
+        if(attempt<2) await new Promise(r=>setTimeout(r, 500));
+      }
+    }
+    throw lastErr;
+  }
+  // Sent as text/plain on purpose: Apps Script Web Apps don't need a CORS preflight for
+  // text/plain bodies, whereas application/json triggers one that Apps Script often can't
+  // satisfy from a browser running on a different origin (e.g. this app on Render).
+  // doPost() on the Apps Script side still reads it fine via JSON.parse(e.postData.contents).
+  async function apiPost(action, payload){
+    const body = JSON.stringify(Object.assign({ action: action }, payload));
+    let lastErr;
+    for(let attempt=0; attempt<=2; attempt++){
+      try{
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: body
+        });
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if(data && data.ok === false) throw new Error(data.error || "save failed");
+        return data;
+      }catch(e){
+        lastErr = e;
+        if(attempt<2) await new Promise(r=>setTimeout(r, 500));
+      }
+    }
+    throw lastErr;
+  }
+
+  async function loadMembers(){
+    try{
+      const arr = await apiGet("members");
+      if(Array.isArray(arr) && arr.length) return arr;
+    }catch(e){}
+    return DEFAULT_MEMBERS.slice();
+  }
+  // Adds one member via the API. The Apps Script side only appends/updates that one row,
+  // so this can never clobber members added by someone else in the meantime.
+  async function saveMemberAdd(name){
+    if(!members.includes(name)) members.push(name);
+    await apiPost("addMember", { name: name });
+  }
+  async function saveMemberRemove(name){
+    members = members.filter(x=>x!==name);
+    await apiPost("removeMember", { name: name });
+  }
+
+  async function loadTeams(){
+    try{
+      const arr = await apiGet("teams");
+      if(Array.isArray(arr) && arr.length) return arr;
+    }catch(e){}
+    return DEFAULT_TEAMS.map(t=>({...t}));
+  }
+  async function saveTeamChange(editedTeam){
+    const byId = {}; teams.forEach(t=>byId[t.id]=t); byId[editedTeam.id] = editedTeam;
+    teams = Object.values(byId);
+    await apiPost("saveTeam", { team: editedTeam });
+  }
+
+  async function loadAssignments(){
+    try{
+      const obj = await apiGet("assignments");
+      if(obj && typeof obj === "object") return obj;
+    }catch(e){}
+    return {};
+  }
+  async function saveAssignmentChange(memberName, teamId){
+    assignments[memberName] = teamId;
+    await apiPost("setAssignment", { member: memberName, teamId: teamId });
+  }
+  async function saveAssignmentRemove(memberName){
+    delete assignments[memberName];
+    await apiPost("removeAssignment", { member: memberName });
+  }
+
+  let dirtyMembersByMonth = {}; // key -> Set of member names edited locally since last successful save
+
+  async function loadMonth(key){
+    if(monthCache[key]) return monthCache[key];
+    let data = {};
+    try{
+      const obj = await apiGet("month", { key: key });
+      if(obj && typeof obj === "object") data = obj;
+    }catch(e){ data = {}; }
+    members.forEach(m=>{ if(!data[m]) data[m] = emptyMemberData(); });
+    monthCache[key] = data;
+    return data;
+  }
+  function flagSaving(){
+    $("saveFlag").textContent = "保存中…";
+    const pip = $("saveFlag").parentElement.querySelector(".pip");
+    if(pip) pip.style.background = "var(--warn)";
+  }
+  function flagSaved(){
+    $("saveFlag").textContent = "保存済み";
+    const pip = $("saveFlag").parentElement.querySelector(".pip");
+    if(pip) pip.style.background = "var(--ok)";
+  }
+  function markDirty(key, memberName){
+    if(!dirtyMembersByMonth[key]) dirtyMembersByMonth[key] = new Set();
+    dirtyMembersByMonth[key].add(memberName);
+  }
+  // Sends only the members that were actually edited locally. The Apps Script side updates
+  // just those rows in the "monthly" sheet (find-or-append), under a script lock, so it
+  // can never wipe out another member's row — even with several people saving at once.
+  async function flushMonthSave(key){
+    const dirty = dirtyMembersByMonth[key];
+    if(!dirty || dirty.size === 0){ flagSaved(); return; }
+    const local = monthCache[key] || {};
+    const payload = {};
+    dirty.forEach(m=>{ if(local[m]) payload[m] = local[m]; });
+    try{
+      await apiPost("saveMonth", { key: key, members: payload });
+      dirtyMembersByMonth[key] = new Set();
+      flagSaved();
+    }catch(e){
+      $("saveFlag").textContent = "保存に失敗しました";
+    }
+  }
+  function scheduleSave(key){
+    flagSaving();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>{ saveTimer = null; flushMonthSave(key); }, 350);
+  }
+  // Forces any pending debounced save to write immediately — called before navigating away
+  // (month change, tab switch, page unload) so nothing typed is ever lost.
+  function flushPendingSave(){
+    if(saveTimer){
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      flushMonthSave(monthKey(current));
+    }
+  }
+  window.addEventListener("beforeunload", flushPendingSave);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") flushPendingSave(); });
+
+  // ---------- rendering shell ----------
+  async function renderAll(){
+    const key = monthKey(current);
+    const disp = monthDisplay(current);
+    $("monthLabel").innerHTML = `<span class="yr">${disp.yr}</span>${disp.mo}月`;
+    const data = await loadMonth(key);
+
+    document.querySelectorAll(".tab-btn").forEach(b=> b.classList.toggle("active", b.dataset.tab===activeTab));
+
+    if(activeTab === "overview") await renderOverviewTab(data, key);
+    else if(activeTab === "detail") renderDetailTab(data, key);
+    else if(activeTab === "targets") renderTargetsTab(data, key);
+    else if(activeTab === "teams") renderTeamsTab(data);
+    else if(activeTab === "teamProgress") renderTeamProgressTab(data);
+  }
+
+  // Deletes a member entirely (used by the dropdown switcher in the 個別入力 tab).
+  async function deleteMember(m){
+    if(!confirm(`「${m}」をメンバーから削除しますか？(過去データは保持されます)`)) return;
+    await saveMemberRemove(m);
+    await saveAssignmentRemove(m);
+    if(activeMember===m) activeMember = members[0] || null;
+    renderAll();
+  }
+
+  // Adds a new member (used by the inline add-row in the 個別入力 tab).
+  async function addMember(name){
+    name = (name||"").trim();
+    if(!name || members.includes(name)) return;
+    await saveMemberAdd(name);
+    await saveAssignmentChange(name, null);
+    activeMember = name;
+    renderAll();
+  }
+
+  // ---------- TAB: overview ----------
+  async function renderOverviewTab(data, key){
+    $("pageTitle").textContent = "チーム概況";
+    $("pageDesc").textContent = "役員以上アポ 達成率順 · メンバーをタップして個別入力へ";
+    const disp = monthDisplay(current);
+
+    const stripData = {};
+    for(const m of members){
+      stripData[m] = [];
+      for(let i=STRIP_MONTHS-1;i>=0;i--){
+        const k = monthKeyOffset(current, -i);
+        const md = await loadMonth(k);
+        const st = computeStats(md[m] || emptyMemberData());
+        stripData[m].push({key:k, rate:st.rate1, hasTarget: st.target1>0, isNow: k===key});
+      }
+    }
+
+    let bodyHtml;
+    if(members.length===0){
+      bodyHtml = `<div class="empty-state"><h3>メンバーがいません</h3><div>左のサイドバーから追加してください。</div></div>`;
+    } else {
+      const ranked = members.slice().sort((a,b)=> computeStats(data[b]||emptyMemberData()).rate1 - computeStats(data[a]||emptyMemberData()).rate1);
+      bodyHtml = ranked.map(m=>{
+        const st = computeStats(data[m]||emptyMemberData());
+        const t = teamOf(m);
+        const pct = Math.min(st.rate1,1)*100;
+        return `
+        <div class="ov-row" data-m="${escapeAttr(m)}">
+          <div class="ov-name">${escapeHtml(m)}${t?`<span class="team-chip" style="background:${t.color.replace('var(','rgba(').includes('rgba')? '' : ''}${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:''}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${rateColor(st.rate1)}"></div></div>
+          <div class="ov-num"><b>${st.actual1}</b> / ${st.target1||"–"}</div>
+          <div class="strip">${stripData[m].map(s=>{
+            if(!s.hasTarget && s.rate===0) return `<div class="cell" data-empty="1" title="${s.key} データなし"></div>`;
+            const h = Math.max(4, Math.min(1,s.rate)*22);
+            return `<div class="cell${s.isNow?' now':''}" title="${s.key}  ${Math.round(s.rate*100)}%"><div style="position:absolute;bottom:0;left:0;right:0;height:${h}px;background:${rateColor(s.rate)};border-radius:0 0 2px 2px;"></div></div>`;
+          }).join("")}</div>
+        </div>`;
+      }).join("");
+    }
+
+    $("detailArea").innerHTML = `
+      <div class="card">
+        <div class="card-head"><h3>役員以上アポ 達成状況</h3><span class="tag">${disp.yr}年${disp.mo}月</span></div>
+        <div class="overview-grid">${bodyHtml}</div>
+      </div>
+    `;
+    $("detailArea").querySelectorAll(".ov-row[data-m]").forEach(row=>{
+      row.addEventListener("click", ()=>{ activeMember = row.dataset.m; activeTab = "detail"; renderAll(); });
+    });
+  }
+
+  // ---------- TAB: detail (per member input) ----------
+  function switcherCardHtml(data){
+    const options = members.length
+      ? members.map(m=>{
+          const st = computeStats(data[m]||emptyMemberData());
+          return `<option value="${escapeAttr(m)}" ${m===activeMember?"selected":""}>${escapeHtml(m)} ・ ${Math.round(st.rate1*100)}%</option>`;
+        }).join("")
+      : `<option value="">メンバーがいません</option>`;
+    return `
+      <div class="card switcher-card">
+        <div class="switcher-row">
+          <div class="switcher-field">
+            <label for="memberSelect">メンバーを選択（自分の画面に切り替え）</label>
+            <select id="memberSelect" ${members.length? "" : "disabled"}>${options}</select>
+          </div>
+          <button class="icon-btn danger" id="deleteMemberBtn" title="このメンバーを削除" ${members.length? "" : "disabled"}>🗑</button>
+        </div>
+        <div class="switcher-row add-row">
+          <input type="text" id="newMemberInline" placeholder="新しいメンバー名を入力…" maxlength="12">
+          <button class="pop-btn" id="addMemberInline">＋ 追加</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function wireSwitcher(data, key){
+    $("memberSelect").addEventListener("change", e=>{
+      flushPendingSave();
+      activeMember = e.target.value;
+      renderAll();
+    });
+    $("deleteMemberBtn").addEventListener("click", ()=> deleteMember(activeMember));
+    $("addMemberInline").addEventListener("click", ()=>{
+      const inp = $("newMemberInline");
+      addMember(inp.value);
+      inp.value = "";
+    });
+    $("newMemberInline").addEventListener("keydown", e=>{ if(e.key==="Enter") $("addMemberInline").click(); });
+  }
+
+  function renderDetailTab(data, key){
+    if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
+
+    if(!activeMember){
+      $("pageTitle").textContent = "個別入力";
+      $("pageDesc").textContent = "メンバーを追加して開始してください";
+      $("detailArea").innerHTML = switcherCardHtml(data) + `<div class="empty-state"><h3>メンバーがいません</h3><div>上のフォームから最初のメンバーを追加してください。</div></div>`;
+      wireSwitcher(data, key);
+      return;
+    }
+    const disp = monthDisplay(current);
+    $("pageTitle").textContent = activeMember + " さんの月次入力";
+    $("pageDesc").textContent = `${disp.yr}年${disp.mo}月 · 内訳マトリクスと目標のみ入力、実績・割合は自動計算`;
+
+    const md = data[activeMember] || (data[activeMember]=emptyMemberData());
+    const st = computeStats(md);
+
+    $("detailArea").innerHTML = switcherCardHtml(data) + `
+      <div class="kpi-pair">
+        <div class="kpi-box">
+          <div class="lbl">役員以上アポ合計</div>
+          <div class="kpi-nums">
+            <span class="actual" style="color:${rateColor(st.rate1)}">${st.actual1}</span>
+            <span class="slash">/</span>
+            <input type="number" min="0" class="target-input" id="t1input" value="${st.target1}">
+            <span style="font-size:11px;color:var(--text-faint)">目標</span>
+          </div>
+          <div class="kpi-meta">
+            <div>残取得アポ数<b style="color:${st.remain1>0?'var(--warn)':'var(--ok)'}">${st.remain1>0? '−'+st.remain1 : (st.remain1===0?'0':'+'+Math.abs(st.remain1))}</b></div>
+            <div>割合<b>${st.target1>0? Math.round(st.rate1*100)+'%' : '–'}</b></div>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate1,1)*100}%;background:${rateColor(st.rate1)}"></div></div>
+        </div>
+        <div class="kpi-box">
+          <div class="lbl">→10億以上役員</div>
+          <div class="kpi-nums">
+            <span class="actual" style="color:${rateColor(st.rate2)}">${st.actual2}</span>
+            <span class="slash">/</span>
+            <input type="number" min="0" class="target-input" id="t2input" value="${st.target2}">
+            <span style="font-size:11px;color:var(--text-faint)">目標</span>
+          </div>
+          <div class="kpi-meta">
+            <div>残取得アポ数<b style="color:${st.remain2>0?'var(--warn)':'var(--ok)'}">${st.remain2>0? '−'+st.remain2 : (st.remain2===0?'0':'+'+Math.abs(st.remain2))}</b></div>
+            <div>割合<b>${st.target2>0? Math.round(st.rate2*100)+'%' : '–'}</b></div>
+          </div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate2,1)*100}%;background:${rateColor(st.rate2)}"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>案件内訳マトリクス</h3><span class="tag">新規/既存 × オーナー/役員 × 案件規模</span></div>
+        <table class="matrix">
+          <thead><tr><th></th>${COLS.map(c=>`<th>${c}</th>`).join("")}<th>行計</th></tr></thead>
+          <tbody>
+            ${ROWS.map(r=>`
+              <tr>
+                <th>${r}</th>
+                ${COLS.map(c=>`<td><input type="number" min="0" data-row="${escapeAttr(r)}" data-col="${escapeAttr(c)}" value="${md.matrix[r][c]||0}"></td>`).join("")}
+                <td class="rowtotal">${st.rowTotals[r]}</td>
+              </tr>`).join("")}
+          </tbody>
+          <tfoot><tr><th>列計</th>${COLS.map(c=>`<td class="coltotal">${st.colTotals[c]}</td>`).join("")}<td>${st.actual1}</td></tr></tfoot>
+        </table>
+        <div class="note"><b>入力ルール：</b>マトリクスのセルと目標欄のみ入力してください。実績・残取得アポ数・割合は自動計算されます（元シートの「太字枠内のみ入力」ルールを踏襲）。</div>
+      </div>
+    `;
+
+    wireSwitcher(data, key);
+    $("t1input").addEventListener("change", e=>{ md.target1 = Number(e.target.value)||0; markDirty(key, activeMember); scheduleSave(key); renderAll(); });
+    $("t2input").addEventListener("change", e=>{ md.target2 = Number(e.target.value)||0; markDirty(key, activeMember); scheduleSave(key); renderAll(); });
+    document.querySelectorAll("table.matrix input").forEach(inp=>{
+      inp.addEventListener("change", e=>{
+        const r = e.target.dataset.row, c = e.target.dataset.col;
+        md.matrix[r][c] = Number(e.target.value)||0;
+        markDirty(key, activeMember); scheduleSave(key); renderAll();
+      });
+    });
+  }
+
+  // ---------- TAB: bulk target editing ----------
+  function renderTargetsTab(data, key){
+    const disp = monthDisplay(current);
+    $("pageTitle").textContent = "目標一括設定";
+    $("pageDesc").textContent = targetsUnlocked
+      ? `${disp.yr}年${disp.mo}月 · メンバーごとの目標をまとめて編集`
+      : `${disp.yr}年${disp.mo}月 · パスコードで保護されています`;
+
+    if(!targetsUnlocked){
+      renderTargetsLock();
+      return;
+    }
+
+    if(bulkSelected === null) bulkSelected = new Set(members);
+    // keep selection in sync if members changed
+    bulkSelected = new Set([...bulkSelected].filter(m => members.includes(m)));
+
+    if(members.length === 0){
+      $("detailArea").innerHTML = `<div class="empty-state"><h3>メンバーがいません</h3><div>左のサイドバーから追加してください。</div></div>`;
+      return;
+    }
+
+    $("detailArea").innerHTML = `
+      <div class="bulk-toolbar">
+        <div class="bulk-apply-box">
+          <div class="lbl">役員以上アポ 目標を一括適用</div>
+          <div class="bulk-apply-row">
+            <input type="number" min="0" id="bulkVal1" placeholder="例: 15">
+            <button id="bulkApply1">選択メンバーに適用</button>
+          </div>
+          <div class="bulk-apply-hint">下の表でチェックされているメンバー全員の「役員以上アポ 目標」を、この値に一括で置き換えます。</div>
+        </div>
+        <div class="bulk-apply-box">
+          <div class="lbl">→10億以上役員 目標を一括適用</div>
+          <div class="bulk-apply-row">
+            <input type="number" min="0" id="bulkVal2" placeholder="例: 8">
+            <button id="bulkApply2">選択メンバーに適用</button>
+          </div>
+          <div class="bulk-apply-hint">下の表でチェックされているメンバー全員の「→10億以上役員 目標」を、この値に一括で置き換えます。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>メンバー別 目標一覧</h3>
+          <span class="tag">${disp.yr}年${disp.mo}月 · 実績は参考表示（編集不可）</span>
+        </div>
+        <div class="bulk-select-bar">
+          <span><a id="selectAll">全員を選択</a> / <a id="selectNone">選択解除</a></span>
+          <span id="selCount"></span>
+        </div>
+        <table class="bulk-table">
+          <thead>
+            <tr>
+              <th style="width:34px;"><input type="checkbox" id="selectAllCb"></th>
+              <th>メンバー</th>
+              <th>役員以上アポ 目標</th>
+              <th class="ref">実績（参考）</th>
+              <th>→10億以上役員 目標</th>
+              <th class="ref">実績（参考）</th>
+            </tr>
+          </thead>
+          <tbody id="bulkTbody">
+            ${members.map(m=>{
+              const md = data[m] || emptyMemberData();
+              const st = computeStats(md);
+              const t = teamOf(m);
+              return `
+              <tr data-m="${escapeAttr(m)}">
+                <td><input type="checkbox" class="rowcb" data-m="${escapeAttr(m)}" ${bulkSelected.has(m)?"checked":""}></td>
+                <td><div class="nm-cell"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${rateColor(st.rate1)}"></span>${escapeHtml(m)}${t?`<span class="team-chip" style="background:${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:""}</div></td>
+                <td><input type="number" min="0" class="row-t1" data-m="${escapeAttr(m)}" value="${st.target1}"></td>
+                <td class="ref">${st.actual1}件 (${st.target1>0? Math.round(st.rate1*100)+'%':'–'})</td>
+                <td><input type="number" min="0" class="row-t2" data-m="${escapeAttr(m)}" value="${st.target2}"></td>
+                <td class="ref">${st.actual2}件 (${st.target2>0? Math.round(st.rate2*100)+'%':'–'})</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        <div class="note"><b>操作方法：</b>表内のセルを直接編集すると1人ずつ、上部の一括適用欄を使うとチェック済みメンバー全員の目標を同じ値でまとめて更新できます。実績列は内訳マトリクスから自動計算されるため、このタブでは編集できません。</div>
+      </div>
+    `;
+
+    function updateSelCount(){
+      $("selCount").textContent = `${bulkSelected.size} / ${members.length} 名を選択中`;
+      $("selectAllCb").checked = bulkSelected.size === members.length && members.length>0;
+    }
+    updateSelCount();
+
+    $("selectAll").addEventListener("click", ()=>{ bulkSelected = new Set(members); syncCheckboxes(); });
+    $("selectNone").addEventListener("click", ()=>{ bulkSelected = new Set(); syncCheckboxes(); });
+    $("selectAllCb").addEventListener("change", e=>{
+      bulkSelected = e.target.checked ? new Set(members) : new Set();
+      syncCheckboxes();
+    });
+    function syncCheckboxes(){
+      document.querySelectorAll(".rowcb").forEach(cb=>{ cb.checked = bulkSelected.has(cb.dataset.m); });
+      updateSelCount();
+    }
+    document.querySelectorAll(".rowcb").forEach(cb=>{
+      cb.addEventListener("change", e=>{
+        if(e.target.checked) bulkSelected.add(e.target.dataset.m); else bulkSelected.delete(e.target.dataset.m);
+        updateSelCount();
+      });
+    });
+
+    document.querySelectorAll(".row-t1").forEach(inp=>{
+      inp.addEventListener("change", e=>{
+        const m = e.target.dataset.m;
+        (data[m] || (data[m]=emptyMemberData())).target1 = Number(e.target.value)||0;
+        markDirty(key, m); scheduleSave(key);
+      });
+    });
+    document.querySelectorAll(".row-t2").forEach(inp=>{
+      inp.addEventListener("change", e=>{
+        const m = e.target.dataset.m;
+        (data[m] || (data[m]=emptyMemberData())).target2 = Number(e.target.value)||0;
+        markDirty(key, m); scheduleSave(key);
+      });
+    });
+
+    $("bulkApply1").addEventListener("click", ()=>{
+      const val = Number($("bulkVal1").value);
+      if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
+      if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
+      bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target1 = val; markDirty(key, m); });
+      scheduleSave(key);
+      renderAll();
+    });
+    $("bulkApply2").addEventListener("click", ()=>{
+      const val = Number($("bulkVal2").value);
+      if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
+      if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
+      bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target2 = val; markDirty(key, m); });
+      scheduleSave(key);
+      renderAll();
+    });
+  }
+
+  // Passcode gate shown instead of the bulk-edit content until the correct code is entered.
+  // Unlock state is in-memory only (not persisted) — closing the tab or reloading the page
+  // requires re-entry, so the tab is protected again next time anyone opens the app.
+  function renderTargetsLock(){
+    $("detailArea").innerHTML = `
+      <div class="card" style="max-width:420px; margin:40px auto 0; text-align:center;">
+        <div style="font-size:40px; margin-bottom:8px;">🔒</div>
+        <h3 style="margin:0 0 6px;">保護されています</h3>
+        <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:20px; line-height:1.7;">
+          このタブは目標値を一括で書き換えられるため、パスコードで保護しています。
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; align-items:stretch;">
+          <input type="text" inputmode="numeric" id="lockInput" placeholder="パスコードを入力" autocomplete="off"
+            style="background:var(--panel-2); border:1.5px solid var(--line); border-radius:12px; color:var(--text); padding:11px 14px; font-size:14px; font-family:inherit; text-align:center;">
+          <button type="button" class="pop-btn" id="lockSubmitBtn" style="width:100%;">ロックを解除</button>
+          <div id="lockError" style="font-size:11.5px; color:var(--bad); min-height:16px;"></div>
+        </div>
+      </div>
+    `;
+    const input = $("lockInput");
+    const submitBtn = $("lockSubmitBtn");
+    input.focus();
+
+    // Deliberately NOT using a <form>/submit event here — Claude artifacts run inside a
+    // restricted iframe where native form submission can be unreliable. Both the button
+    // click and the Enter key are wired directly instead.
+    function attemptUnlock(){
+      // Normalize full-width digits (１２３ → 123) and trim stray whitespace — mobile
+      // keyboards and some IMEs default to full-width numerals, which would otherwise
+      // silently fail a strict string match even though the passcode "looks" right.
+      const normalized = input.value
+        .trim()
+        .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+      if(normalized === TARGETS_PASSCODE){
+        targetsUnlocked = true;
+        renderAll();
+      } else {
+        $("lockError").textContent = "パスコードが違います";
+        input.value = "";
+        input.focus();
+      }
+    }
+    submitBtn.addEventListener("click", attemptUnlock);
+    input.addEventListener("keydown", e=>{
+      if(e.key === "Enter"){ e.preventDefault(); attemptUnlock(); }
+    });
+  }
+
+  // ---------- TAB: team assignment (drag & drop) ----------
+  function renderTeamsTab(){
+    $("pageTitle").textContent = "チーム配置";
+    $("pageDesc").textContent = "カードをドラッグ、または矢印ボタンでチームを移動できます";
+
+    const cols = [{id:null, name:"未配属", leader:null, color:"var(--text-faint)"}, ...teams];
+
+    $("detailArea").innerHTML = `
+      <div class="card">
+        <div class="card-head"><h3>メンバーのチーム配置</h3><span class="tag">全員が編集できる共有ビューです</span></div>
+        <div class="team-board" id="teamBoard">
+          ${cols.map(col=>`
+            <div class="team-col" data-team="${col.id ?? ''}">
+              <div class="team-col-head">
+                <span class="team-swatch" style="background:${col.color}"></span>
+                ${col.id ? `<input class="team-name" data-team-id="${col.id}" value="${escapeAttr(col.name)}">` : `<span style="font-weight:800;font-size:14px;">${col.name}</span>`}
+                <span class="team-count" data-count="${col.id ?? 'null'}">0名</span>
+              </div>
+              ${col.id ? `<div class="leader-row">リーダー <input class="leader-name" data-leader-id="${col.id}" value="${escapeAttr(col.leader||'')}"></div>` : `<div class="leader-row">&nbsp;</div>`}
+              <div class="drop-zone" data-drop="${col.id ?? ''}"></div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+
+    buildTeamBoard();
+
+    // team name / leader edits
+    $("detailArea").querySelectorAll("input.team-name").forEach(inp=>{
+      inp.addEventListener("change", async e=>{
+        const t = teams.find(x=>x.id===e.target.dataset.teamId);
+        if(t){ t.name = e.target.value.trim() || t.name; await saveTeamChange(t); renderAll(); }
+      });
+    });
+    $("detailArea").querySelectorAll("input.leader-name").forEach(inp=>{
+      inp.addEventListener("change", async e=>{
+        const t = teams.find(x=>x.id===e.target.dataset.leaderId);
+        if(t){ t.leader = e.target.value.trim(); await saveTeamChange(t); }
+      });
+    });
+
+    // drop zones — dragenter/dragleave counters avoid flicker when hovering over child cards
+    const dragCounters = new WeakMap();
+    $("detailArea").querySelectorAll(".team-col").forEach(col=>{
+      dragCounters.set(col, 0);
+      col.addEventListener("dragenter", e=>{
+        e.preventDefault();
+        dragCounters.set(col, (dragCounters.get(col)||0) + 1);
+        col.classList.add("dragover");
+      });
+      col.addEventListener("dragover", e=>{ e.preventDefault(); });
+      col.addEventListener("dragleave", ()=>{
+        const c = (dragCounters.get(col)||0) - 1;
+        dragCounters.set(col, c);
+        if(c <= 0){ col.classList.remove("dragover"); dragCounters.set(col, 0); }
+      });
+      col.addEventListener("drop", async e=>{
+        e.preventDefault();
+        col.classList.remove("dragover");
+        dragCounters.set(col, 0);
+        if(!dragMember) return;
+        const teamId = col.dataset.team || null;
+        const m = dragMember;
+        dragMember = null;
+        await moveMemberCard(m, teamId);
+      });
+    });
+  }
+
+  // Build the board from scratch (used when the tab first opens, or members/teams change structurally).
+  function buildTeamBoard(){
+    const cols = [{id:null}, ...teams];
+    cols.forEach(col=>{
+      const zone = document.querySelector(`.drop-zone[data-drop="${col.id ?? ''}"]`);
+      if(!zone) return;
+      const list = members.filter(m => (assignments[m] || null) === (col.id || null));
+      setColumnCount(col.id, list.length);
+      zone.innerHTML = list.length
+        ? list.map(m => cardHtml(m, col.id, cols)).join("")
+        : `<div class="drop-hint">ここにドラッグ、または矢印で移動</div>`;
+    });
+    document.querySelectorAll("#teamBoard .member-card").forEach(wireCard);
+  }
+
+  function cardHtml(m, currentTeamId, cols){
+    const otherCols = cols.filter(c => (c.id||null) !== (currentTeamId||null));
+    return `
+    <div class="member-card" draggable="true" data-m="${escapeAttr(m)}">
+      <span class="rate-pip" style="background:var(--teal)"></span>
+      <span class="nm">${escapeHtml(m)}</span>
+      <div class="move-btns">
+        ${otherCols.map(c=>`<button data-move="${escapeAttr(m)}" data-to="${c.id ?? ''}" title="${c.id? teams.find(t=>t.id===c.id).name : '未配属'}へ移動">${c.id? "→" : "×"}</button>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  function wireCard(card){
+    card.addEventListener("dragstart", e=>{
+      dragMember = card.dataset.m;
+      card.classList.add("dragging");
+      try{ e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", card.dataset.m); }catch(err){}
+    });
+    card.addEventListener("dragend", ()=> card.classList.remove("dragging"));
+    card.querySelectorAll("[data-move]").forEach(btn=>{
+      btn.addEventListener("click", async e=>{
+        e.stopPropagation();
+        await moveMemberCard(btn.dataset.move, btn.dataset.to || null);
+      });
+    });
+  }
+
+  function setColumnCount(teamId, n){
+    const countEl = document.querySelector(`.team-count[data-count="${teamId ?? 'null'}"]`);
+    if(!countEl) return;
+    countEl.textContent = n + "名";
+    countEl.classList.add("bump");
+    setTimeout(()=> countEl.classList.remove("bump"), 400);
+  }
+
+  // Moves exactly one card's real DOM node into its destination zone, then FLIP-animates
+  // it from where it used to be to where it now physically sits — guaranteeing it settles
+  // in the correct column every time (no rebuild/mismatch involved).
+  // The DOM move happens synchronously (no await in between) so the card never has a chance
+  // to sit back in its old column while storage is being written; saving happens afterward.
+  async function moveMemberCard(memberName, toTeamId){
+    const fromTeamId = assignments[memberName] || null;
+    if(fromTeamId === toTeamId) return;
+
+    const board = $("teamBoard");
+    const targetZone = board && board.querySelector(`.drop-zone[data-drop="${toTeamId ?? ''}"]`);
+    const sourceZone = board && board.querySelector(`.drop-zone[data-drop="${fromTeamId ?? ''}"]`);
+    const card = board && Array.from(board.querySelectorAll(".member-card")).find(el => el.dataset.m === memberName);
+
+    assignments[memberName] = toTeamId; // update the in-memory model immediately
+
+    if(board && targetZone && card){
+      const startRect = card.getBoundingClientRect();
+
+      // rebuild this single card's inner content (its move-buttons differ per column) — same outer node
+      const cols = [{id:null}, ...teams];
+      card.innerHTML = `
+        <span class="rate-pip" style="background:var(--teal)"></span>
+        <span class="nm">${escapeHtml(memberName)}</span>
+        <div class="move-btns">
+          ${cols.filter(c=>(c.id||null)!==(toTeamId||null)).map(c=>`<button data-move="${escapeAttr(memberName)}" data-to="${c.id ?? ''}" title="${c.id? teams.find(t=>t.id===c.id).name : '未配属'}へ移動">${c.id? "→" : "×"}</button>`).join("")}
+        </div>
+      `;
+      card.querySelectorAll("[data-move]").forEach(btn=>{
+        btn.addEventListener("click", async e=>{
+          e.stopPropagation();
+          await moveMemberCard(btn.dataset.move, btn.dataset.to || null);
+        });
+      });
+
+      const hint = targetZone.querySelector(".drop-hint");
+      if(hint) hint.remove();
+
+      targetZone.appendChild(card); // <- the actual node now physically lives in the destination column, right away
+
+      setColumnCount(toTeamId, targetZone.querySelectorAll(".member-card").length);
+      if(sourceZone){
+        const remaining = sourceZone.querySelectorAll(".member-card").length;
+        setColumnCount(fromTeamId, remaining);
+        if(remaining === 0){ sourceZone.innerHTML = `<div class="drop-hint">ここにドラッグ、または矢印で移動</div>`; }
+      }
+
+      // FLIP: jump the moved card back to where it visually was, then transition to its real (new) spot
+      const endRect = card.getBoundingClientRect();
+      const dx = startRect.left - endRect.left, dy = startRect.top - endRect.top;
+      card.style.transition = "none";
+      card.style.transform = `translate(${dx}px, ${dy}px)`;
+      void card.offsetWidth; // force reflow so the jump above is committed before we animate away from it
+      requestAnimationFrame(()=>{
+        card.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)";
+        card.style.transform = "";
+        card.classList.add("card-landed");
+        card.addEventListener("transitionend", function done(){
+          card.style.transition = ""; card.removeEventListener("transitionend", done);
+        }, {once:true});
+        setTimeout(()=> card.classList.remove("card-landed"), 650);
+      });
+    }
+
+    // persist afterward, in the background — the UI has already settled by this point
+    flagSaving();
+    try{ await saveAssignmentChange(memberName, toTeamId); flagSaved(); }
+    catch(e){ $("saveFlag").textContent = "保存に失敗しました"; }
+  }
+
+  // ---------- TAB: team progress ----------
+  function renderTeamProgressTab(data){
+    const disp = monthDisplay(current);
+    $("pageTitle").textContent = "チーム別進捗";
+    $("pageDesc").textContent = `${disp.yr}年${disp.mo}月 · 辻チーム / 熊倉チーム の合算実績`;
+
+    const groups = teams.map(t=>{
+      const mem = members.filter(m => assignments[m] === t.id);
+      let a1=0,t1=0,a2=0,t2=0;
+      const rows = mem.map(m=>{
+        const st = computeStats(data[m]||emptyMemberData());
+        a1+=st.actual1; t1+=st.target1; a2+=st.actual2; t2+=st.target2;
+        return { m, st };
+      }).sort((x,y)=> y.st.rate1 - x.st.rate1);
+      return { team:t, members:mem, rows, a1,t1,a2,t2, rate1: t1>0? a1/t1:0, rate2: t2>0? a2/t2:0 };
+    });
+    const unassigned = members.filter(m => !assignments[m]);
+
+    const totalRate = groups.reduce((s,g)=>s+g.a1,0);
+    const compareSegs = groups.map(g=>{
+      const share = totalRate>0 ? g.a1/totalRate : (1/groups.length);
+      return `<div style="flex:${Math.max(share,0.02)};background:${g.team.color}"></div>`;
+    }).join("");
+
+    const praise = buildPraiseMessage(groups);
+
+    $("detailArea").innerHTML = `
+      <div class="card">
+        <div class="card-head"><h3>チーム間の実績シェア（役員以上アポ 実績数ベース）</h3><span class="tag">${disp.yr}年${disp.mo}月</span></div>
+        <div class="tp-compare">${compareSegs || '<div style="flex:1;background:var(--line)"></div>'}</div>
+        <div style="display:flex;gap:20px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;">
+          ${groups.map(g=>`<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${g.team.color};margin-right:6px;"></span>${escapeHtml(g.team.name)} ${g.a1}件</span>`).join("")}
+        </div>
+        ${praiseCardHtml(praise)}
+      </div>
+
+      <div class="team-progress-grid">
+        ${groups.map(g=>`
+          <div class="tp-card">
+            <div class="tp-head">
+              <span class="team-swatch" style="background:${g.team.color}; width:13px;height:13px;"></span>
+              <h3>${escapeHtml(g.team.name)}</h3>
+            </div>
+            <div class="tp-leader">リーダー: ${escapeHtml(g.team.leader||"未設定")} ・ ${g.members.length}名</div>
+
+            <div class="tp-big"><span class="n" style="color:var(--teal-dim)">${g.a1}</span><span class="d">/ ${g.t1||"–"} 件</span></div>
+            <div class="tp-sub">役員以上アポ 合計達成率 ${g.t1>0? Math.round(g.rate1*100)+'%':'–'}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.min(g.rate1,1)*100}%;background:var(--teal)"></div></div>
+
+            <div class="tp-big" style="margin-top:16px;"><span class="n" style="font-size:22px;color:var(--gold)">${g.a2}</span><span class="d" style="font-size:13px;">/ ${g.t2||"–"} 件（→10億以上役員）</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.min(g.rate2,1)*100}%;background:var(--gold)"></div></div>
+
+            <div class="tp-members">
+              ${g.rows.length ? g.rows.map(r=>`
+                <div class="tp-mrow">
+                  <span class="nm">${escapeHtml(r.m)}</span>
+                  <div class="bar-track"><div class="bar-fill" style="width:${Math.min(r.st.rate1,1)*100}%;background:${rateColor(r.st.rate1)}"></div></div>
+                  <span class="num">${r.st.actual1}/${r.st.target1||"–"}</span>
+                </div>
+              `).join("") : `<div class="drop-hint">メンバー未配置（チーム配置タブで追加）</div>`}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      ${unassigned.length ? `
+      <div class="card">
+        <div class="card-head"><h3>未配属メンバー</h3><span class="tag">チーム配置タブで割り当ててください</span></div>
+        <div class="overview-grid">
+          ${unassigned.map(m=>{
+            const st = computeStats(data[m]||emptyMemberData());
+            return `<div class="ov-row" data-m="${escapeAttr(m)}">
+              <div class="ov-name">${escapeHtml(m)}</div>
+              <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate1,1)*100}%;background:${rateColor(st.rate1)}"></div></div>
+              <div class="ov-num"><b>${st.actual1}</b> / ${st.target1||"–"}</div>
+              <div></div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>` : ""}
+    `;
+    $("detailArea").querySelectorAll(".ov-row[data-m]").forEach(row=>{
+      row.addEventListener("click", ()=>{ activeMember = row.dataset.m; activeTab = "detail"; renderAll(); });
+    });
+  }
+
+  // ---------- Praise card (always-visible team share celebration) ----------
+  // Tiers are ordered by the point-gap between the #1 and #2 team's share of total
+  // actual appointments — bigger gap, bigger celebration. Each tier has several phrasings
+  // so it doesn't always say the same thing as the data shifts.
+  const PRAISE_TIERS = [
+    { maxGap: 6, emoji: "🤝", label: "接戦", accent: ["#00CFC1", "#FF6FA8"], templates: [
+      "{leader}が僅差でトップ！{a1}件の実績はさすがですが、{second}との差はわずか{gap}pt。まだまだ分かりません🔥",
+      "接戦です！{leader}がほんの少しリードしていますが、{second}がすぐ追いつける差です。ここからが見どころですね。",
+      "{leader}と{second}、ほぼ横並びの好勝負。どちらのチームも良いペースで進んでいます👏"
+    ]},
+    { maxGap: 20, emoji: "👏", label: "リード中", accent: ["#00CFC1", "#22C55E"], templates: [
+      "{leader}が一歩リード！{a1}件の実績、着実に積み上げていますね。",
+      "{leader}がじわじわ差を広げています。{second}の巻き返しにも期待です！",
+      "いいペースです、{leader}！このまま安定して積み上げていきましょう。"
+    ]},
+    { maxGap: 40, emoji: "🚀", label: "独走中", accent: ["#00CFC1", "#FFAB2E"], templates: [
+      "{leader}がしっかり独走中！{a1}件は他を大きく引き離すペースです🚀",
+      "{leader}、絶好調です！このペースなら目標達成も見えてきましたね。",
+      "{leader}の勢いが止まりません。{second}との差は{gap}ptに広がっています。"
+    ]},
+    { maxGap: Infinity, emoji: "🏆", label: "圧倒的", accent: ["#FF6FA8", "#FFAB2E"], templates: [
+      "圧倒的です、{leader}！{a1}件という実績はチーム全体の頑張りの証ですね🎉",
+      "{leader}が独走状態！これはもう表彰ものの数字です、お見事🏆",
+      "{leader}の勢いが規格外です。{second}との差、なんと{gap}pt！このペースは要チェックです。"
+    ]}
+  ];
+  const PRAISE_EMPTY = [
+    "まだ今月の実績データがありません。数字が入るとここに称賛コメントが表示されます📝",
+    "実績はこれから！まずは各メンバーの入力から始めましょう。"
+  ];
+
+  function buildPraiseMessage(groups){
+    const ranked = groups.slice().sort((a,b)=> b.a1 - a.a1);
+    const totalActual = ranked.reduce((s,g)=>s+g.a1, 0);
+    if(ranked.length === 0 || totalActual === 0){
+      return { emoji: "📝", label: "準備中", accent:["#A6A9CB","#6B6F98"], text: PRAISE_EMPTY[Math.floor(Math.random()*PRAISE_EMPTY.length)], leaderTeam: null, ranked };
+    }
+    const leader = ranked[0];
+    const second = ranked[1] || { team:{name:"他チーム"}, a1:0 };
+    const leaderShare = leader.a1 / totalActual;
+    const secondShare = second.a1 / totalActual;
+    const gapPts = Math.round((leaderShare - secondShare) * 100);
+    const tier = PRAISE_TIERS.find(t => gapPts <= t.maxGap) || PRAISE_TIERS[PRAISE_TIERS.length-1];
+    const template = tier.templates[Math.floor(Math.random()*tier.templates.length)];
+    const text = template
+      .replace(/\{leader\}/g, leader.team.name)
+      .replace(/\{second\}/g, second.team.name)
+      .replace(/\{a1\}/g, leader.a1)
+      .replace(/\{gap\}/g, gapPts);
+    return { emoji: tier.emoji, label: tier.label, accent: tier.accent, text, leaderTeam: leader, gapPts, ranked };
+  }
+
+  function praiseCardHtml(p){
+    return `
+      <div class="praise-card">
+        <div class="praise-banner" style="background:linear-gradient(135deg, ${p.accent[0]}, ${p.accent[1]});">
+          <span class="emoji">${p.emoji}</span>
+          <div class="tier-label">${escapeHtml(p.label)}</div>
+        </div>
+        <div class="praise-body">
+          <p>${escapeHtml(p.text)}</p>
+          ${p.leaderTeam ? `
+          <div class="stat-row">
+            <div class="praise-stat"><span class="v">${p.leaderTeam.a1}</span><span class="l">${escapeHtml(p.leaderTeam.team.name)} 実績</span></div>
+            <div class="praise-stat"><span class="v">${p.gapPts}pt</span><span class="l">2位との差</span></div>
+          </div>` : ``}
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch])); }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // ---------- controls ----------
+  $("prevMonth").addEventListener("click", ()=>{ flushPendingSave(); current.setMonth(current.getMonth()-1); renderAll(); });
+  $("nextMonth").addEventListener("click", ()=>{ flushPendingSave(); current.setMonth(current.getMonth()+1); renderAll(); });
+
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ flushPendingSave(); activeTab = btn.dataset.tab; renderAll(); });
+  });
+
+  $("resetBtn").addEventListener("click", async ()=>{
+    const key = monthKey(current);
+    if(!confirm(`${monthDisplay(current).yr}年${monthDisplay(current).mo}月の全メンバーの入力をクリアします。よろしいですか？`)) return;
+    const fresh = {};
+    members.forEach(m=>{ fresh[m] = emptyMemberData(); markDirty(key, m); });
+    monthCache[key] = fresh;
+    scheduleSave(key);
+    renderAll();
+  });
+
+  $("exportBtn").addEventListener("click", async ()=>{
+    const key = monthKey(current);
+    const data = await loadMonth(key);
+    let rows = [["メンバー","チーム","役員以上アポ_目標","役員以上アポ_実績","残取得アポ数","割合","→10億以上役員_目標","→10億以上役員_実績"]];
+    members.forEach(m=>{
+      const st = computeStats(data[m]||emptyMemberData());
+      const t = teamOf(m);
+      rows.push([m, t?t.name:"未配属", st.target1, st.actual1, st.remain1, st.target1>0? (Math.round(st.rate1*1000)/10)+"%":"", st.target2, st.actual2]);
+    });
+    const csv = "\uFEFF" + rows.map(r=>r.join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `AP_KPI_${key}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- full backup / restore (safety net) ----------
+  // Bundles members, teams, assignments, and every month's data into one JSON file.
+  // Recommended before republishing this app, in case anything doesn't carry over cleanly.
+  $("backupBtn").addEventListener("click", async ()=>{
+    const btn = $("backupBtn");
+    const original = btn.textContent;
+    btn.textContent = "収集中…"; btn.disabled = true;
+    try{
+      const backup = { exportedAt: new Date().toISOString(), members: [], teams: [], assignments: {}, months: {} };
+      try{ backup.members = await apiGet("members"); }catch(e){}
+      try{ backup.teams = await apiGet("teams"); }catch(e){}
+      try{ backup.assignments = await apiGet("assignments"); }catch(e){}
+      try{
+        const keys = await apiGet("months"); // list of "YYYY-MM" strings that have data
+        for(const k of (keys || [])){
+          try{ backup.months[k] = await apiGet("month", { key: k }); }catch(e){}
+        }
+      }catch(e){}
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `AP_KPI_backup_${monthKey(current)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      btn.textContent = original; btn.disabled = false;
+    }
+  });
+
+  $("restoreBtn").addEventListener("click", ()=> $("restoreFile").click());
+  $("restoreFile").addEventListener("change", async e=>{
+    const file = e.target.files[0];
+    e.target.value = "";
+    if(!file) return;
+    let backup;
+    try{
+      const text = await file.text();
+      backup = JSON.parse(text);
+    }catch(err){
+      alert("このファイルを読み込めませんでした。バックアップ用のJSONファイルを選択してください。");
+      return;
+    }
+    const monthCount = backup.months ? Object.keys(backup.months).length : 0;
+    const memberCount = Array.isArray(backup.members) ? backup.members.length : 0;
+    if(!confirm(`このバックアップ(${backup.exportedAt || "日時不明"})から復元します。\nメンバー ${memberCount}名 / ${monthCount}ヶ月分のデータ\n\n現在スプレッドシートに保存されているデータは、バックアップの内容で上書きされます。よろしいですか？`)) return;
+
+    try{
+      await apiPost("restoreBackup", { backup: backup });
+      if(Array.isArray(backup.members)) members = backup.members;
+      if(Array.isArray(backup.teams)) teams = backup.teams;
+      if(backup.assignments) assignments = backup.assignments;
+      monthCache = {}; // force fresh reads for any month the user views next
+      dirtyMembersByMonth = {};
+      members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
+      if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
+      alert("復元が完了しました。");
+      renderAll();
+    }catch(err){
+      alert("復元中にエラーが発生しました。もう一度お試しください。");
+    }
+  });
+
+  // ---------- init ----------
+  (async function init(){
+    if(!GAS_URL || GAS_URL.indexOf("PASTE_YOUR") !== -1){
+      document.body.innerHTML = `
+        <div style="max-width:520px;margin:80px auto;padding:32px;font-family:sans-serif;text-align:center;
+                    background:#fff;border:1px solid #eee;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
+          <div style="font-size:36px;margin-bottom:8px;">🛠️</div>
+          <h2 style="margin:0 0 10px;">セットアップが必要です</h2>
+          <p style="color:#666;line-height:1.7;font-size:14px;">
+            このファイル内の <code>GAS_URL</code> の値が、まだ設定用のプレースホルダーのままです。<br>
+            Google Apps ScriptのWebアプリをデプロイして取得したURLを、<br>
+            index.html内の <code>GAS_URL</code> に貼り付けてから、もう一度開いてください。<br>
+            詳しい手順は「セットアップ手順」ドキュメントを参照してください。
+          </p>
+        </div>`;
+      return;
+    }
+    try{ members = await loadMembers(); }catch(e){ members = DEFAULT_MEMBERS.slice(); }
+    try{ teams = await loadTeams(); }catch(e){ teams = DEFAULT_TEAMS.map(t=>({...t})); }
+    try{ assignments = await loadAssignments(); }catch(e){ assignments = {}; }
+    members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
+    activeMember = members[0] || null;
+    await renderAll();
+  })();
+})();
+</script>
+</body>
+</html>
