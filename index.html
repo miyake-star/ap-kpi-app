@@ -92,6 +92,20 @@
   .util-btn:hover{ border-color:var(--teal); color:var(--teal-dim); background:var(--teal-glow); }
   .util-btn.danger:hover{ border-color:var(--bad); color:var(--bad); background:rgba(255,90,110,0.08); }
 
+  .auto-refresh-toggle{
+    display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-dim); font-weight:600;
+    cursor:pointer; user-select:none; white-space:nowrap;
+  }
+  .auto-refresh-toggle input{ accent-color:var(--teal); width:14px; height:14px; cursor:pointer; }
+  .refresh-ic{ display:inline-block; }
+  #refreshBtn.spinning .refresh-ic{ animation:spinRefresh .7s linear infinite; }
+  @keyframes spinRefresh{ to{ transform:rotate(360deg); } }
+  .last-updated{ font-size:10px; color:var(--text-faint); white-space:nowrap; }
+  @media (prefers-reduced-motion: reduce){
+    #refreshBtn.spinning .refresh-ic{ animation:none !important; }
+  }
+
+
   .tabs-top{
     display:flex; gap:4px; overflow-x:auto; padding-bottom:0; margin-top:2px;
     scrollbar-width:none;
@@ -405,6 +419,12 @@
       <div class="status-cluster">
         <span class="shared-flag">🔗 チーム共有</span>
         <span class="save-flag"><span class="pip"></span><span id="saveFlag">保存済み</span></span>
+        <label class="auto-refresh-toggle" title="オンにすると自動で最新データを取得します">
+          <input type="checkbox" id="autoRefreshToggle" checked>
+          自動更新
+        </label>
+        <button class="util-btn" id="refreshBtn"><span class="refresh-ic">🔄</span> 更新</button>
+        <span id="lastUpdated" class="last-updated"></span>
         <button class="util-btn" id="exportBtn">⬇ CSV出力</button>
         <button class="util-btn" id="backupBtn">💾 全体バックアップ</button>
         <button class="util-btn" id="restoreBtn">♻️ 復元</button>
@@ -1510,6 +1530,76 @@
     }
   });
 
+  // ---------- live refresh (auto-polling + manual button) ----------
+  // The Sheets backend has no push/websocket mechanism, so "live" here means: periodically
+  // re-fetch and re-render. We skip a cycle whenever the user is actively typing or has an
+  // unsaved edit pending, so nobody's in-progress input ever gets silently overwritten.
+  const AUTO_REFRESH_MS = 20000;
+  let autoRefreshTimer = null;
+
+  function isEditingSomething(){
+    const el = document.activeElement;
+    if(!el) return false;
+    const tag = el.tagName;
+    if(tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") return false;
+    const area = $("detailArea");
+    return !!(area && area.contains(el));
+  }
+
+  function updateLastUpdatedLabel(){
+    const el = $("lastUpdated");
+    if(!el) return;
+    const now = new Date();
+    el.textContent = "最終更新 " + now.toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
+
+  async function refreshCurrentView(opts){
+    opts = opts || {};
+    const force = !!opts.force;
+    if(!force){
+      if(isEditingSomething()) return;   // don't interrupt someone mid-input
+      if(saveTimer) return;               // an edit is queued to save — don't race it
+    } else {
+      flushPendingSave(); // manual refresh: make sure our own pending edit goes out first
+    }
+    const btn = $("refreshBtn");
+    if(btn) btn.classList.add("spinning");
+    try{
+      const key = monthKey(current);
+      delete monthCache[key]; // force a fresh read instead of using the cached copy
+      members = await loadMembers();
+      teams = await loadTeams();
+      assignments = await loadAssignments();
+      members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
+      if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
+      await loadMonth(key);
+      await renderAll();
+      updateLastUpdatedLabel();
+    }catch(e){
+      // silent — keep showing the last good view rather than an error state
+    } finally {
+      if(btn) btn.classList.remove("spinning");
+    }
+  }
+
+  function startAutoRefresh(){
+    stopAutoRefresh();
+    autoRefreshTimer = setInterval(()=> refreshCurrentView({ force:false }), AUTO_REFRESH_MS);
+  }
+  function stopAutoRefresh(){
+    if(autoRefreshTimer){ clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  }
+
+  $("refreshBtn").addEventListener("click", ()=> refreshCurrentView({ force:true }));
+  $("autoRefreshToggle").addEventListener("change", e=>{
+    if(e.target.checked) startAutoRefresh(); else stopAutoRefresh();
+  });
+  document.addEventListener("visibilitychange", ()=>{
+    // pause polling while the tab is hidden, resume (with an immediate refresh) when it's back
+    if(document.visibilityState === "hidden"){ stopAutoRefresh(); }
+    else if($("autoRefreshToggle").checked){ refreshCurrentView({ force:false }); startAutoRefresh(); }
+  });
+
   // ---------- init ----------
   (async function init(){
     if(!GAS_URL || GAS_URL.indexOf("PASTE_YOUR") !== -1){
@@ -1533,6 +1623,8 @@
     members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
     activeMember = members[0] || null;
     await renderAll();
+    updateLastUpdatedLabel();
+    startAutoRefresh();
   })();
 })();
 </script>
