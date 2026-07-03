@@ -133,6 +133,50 @@
     color:var(--text-faint); cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center;
     transition:.15s;
   }
+
+  /* ---------- pace advice / warning card ---------- */
+  .advice-card{
+    display:flex; gap:14px; align-items:flex-start; border-radius:18px; padding:16px 20px;
+    margin-bottom:20px; border:1.5px solid transparent; transition:background .25s ease, border-color .25s ease;
+  }
+  .advice-card .advice-icon{ font-size:26px; line-height:1; flex:none; }
+  .advice-card .advice-title{ font-weight:800; font-size:14px; margin-bottom:3px; }
+  .advice-card .advice-body{ font-size:12.5px; line-height:1.7; color:var(--text-dim); }
+  .advice-card .advice-meta{ font-size:10.5px; color:var(--text-faint); margin-top:6px; }
+
+  .advice-card.tier-neutral{ background:var(--panel-2); border-color:var(--line); }
+  .advice-card.tier-neutral .advice-title{ color:var(--text-dim); }
+
+  .advice-card.tier-good{ background:var(--teal-glow); border-color:rgba(0,207,193,0.4); }
+  .advice-card.tier-good .advice-title{ color:var(--teal-dim); }
+
+  .advice-card.tier-caution{ background:rgba(255,171,46,0.12); border-color:rgba(255,171,46,0.45); }
+  .advice-card.tier-caution .advice-title{ color:#B9750A; }
+
+  .advice-card.tier-warning{
+    background:rgba(255,90,110,0.12); border-color:var(--bad);
+    box-shadow:0 0 0 1px rgba(255,90,110,0.25);
+    animation:advicePulse 1.8s ease-in-out infinite;
+  }
+  .advice-card.tier-warning .advice-title{ color:var(--bad); font-size:15px; }
+  .advice-card.tier-warning .advice-icon{ animation:adviceIconShake 1.8s ease-in-out infinite; }
+  @keyframes advicePulse{
+    0%, 100%{ box-shadow:0 0 0 1px rgba(255,90,110,0.25), 0 8px 20px -12px rgba(255,90,110,0.3); }
+    50%{ box-shadow:0 0 0 4px rgba(255,90,110,0.18), 0 12px 26px -12px rgba(255,90,110,0.45); }
+  }
+  @keyframes adviceIconShake{
+    0%, 100%{ transform:rotate(0deg); }
+    10%{ transform:rotate(-8deg); }
+    20%{ transform:rotate(8deg); }
+    30%{ transform:rotate(-6deg); }
+    40%{ transform:rotate(6deg); }
+    50%, 100%{ transform:rotate(0deg); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .advice-card.tier-warning{ animation:none !important; }
+    .advice-card.tier-warning .advice-icon{ animation:none !important; }
+  }
+
   .icon-btn.danger:hover{ border-color:var(--bad); color:var(--bad); background:rgba(255,90,110,0.08); }
   .add-row{ gap:8px; }
   .add-row input{
@@ -416,10 +460,6 @@
         <span class="save-flag"><span class="pip"></span><span id="saveFlag">保存済み</span></span>
         <button class="util-btn" id="refreshBtn"><span class="refresh-ic">🔄</span> 更新</button>
         <span id="lastUpdated" class="last-updated"></span>
-        <button class="util-btn" id="exportBtn">⬇ CSV出力</button>
-        <button class="util-btn" id="backupBtn">💾 全体バックアップ</button>
-        <button class="util-btn" id="restoreBtn">♻️ 復元</button>
-        <input type="file" id="restoreFile" accept="application/json" style="display:none;">
         <button class="util-btn danger" id="resetBtn">この月をクリア</button>
       </div>
     </div>
@@ -773,6 +813,101 @@
   }
 
   // ---------- TAB: detail (per member input) ----------
+
+  // Counts weekdays (Mon–Fri) between day `from` and day `to` (inclusive) of a given
+  // year/month. Public holidays are intentionally not accounted for — treated as a plain
+  // weekday count per the requested spec.
+  function countWeekdays(year, monthIndex, from, to){
+    let n = 0;
+    for(let d=from; d<=to; d++){
+      const wd = new Date(year, monthIndex, d).getDay();
+      if(wd !== 0 && wd !== 6) n++;
+    }
+    return n;
+  }
+
+  // How far into the month's business days "today" is, for whichever month is currently
+  // being viewed. Past months count as fully elapsed; future months as not yet started.
+  function getPaceInfo(){
+    const year = current.getFullYear(), monthIndex = current.getMonth();
+    const daysInMonth = new Date(year, monthIndex+1, 0).getDate();
+    const totalBiz = countWeekdays(year, monthIndex, 1, daysInMonth);
+    const today = new Date();
+    const viewingYM = year*12 + monthIndex;
+    const todayYM = today.getFullYear()*12 + today.getMonth();
+    let elapsedBiz;
+    if(viewingYM === todayYM) elapsedBiz = countWeekdays(year, monthIndex, 1, today.getDate());
+    else if(viewingYM < todayYM) elapsedBiz = totalBiz;
+    else elapsedBiz = 0;
+    return {
+      totalBiz, elapsedBiz,
+      remainingBiz: Math.max(totalBiz - elapsedBiz, 0),
+      expectedRatio: totalBiz > 0 ? elapsedBiz / totalBiz : 0
+    };
+  }
+
+  // Compares actual pace to the "should be at X% by now" line and returns everything the
+  // advice card needs to render. Based primarily on 役員以上アポ (rate1); →10億以上役員 is
+  // mentioned as a secondary line.
+  function computeAdvice(st, pace){
+    const pct = n => Math.round(n*100);
+    const remainingTarget1 = Math.max(st.target1 - st.actual1, 0);
+    const perDayNeeded = pace.remainingBiz > 0 ? (remainingTarget1 / pace.remainingBiz) : remainingTarget1;
+    const gap = st.rate1 - pace.expectedRatio; // negative = behind pace
+
+    const sub2 = st.target2 > 0
+      ? `→10億以上役員は${st.actual2}/${st.target2}件（${pct(st.rate2)}%）です。`
+      : ``;
+
+    if(st.target1 <= 0){
+      return { tier:"neutral", icon:"📋", title:"目標が未設定です",
+        body:`「目標」欄に数字を入れると、営業日ベースの進捗アドバイスがここに表示されます。`, meta:"" };
+    }
+    if(st.rate1 >= 1){
+      return { tier:"good", icon:"🎉", title:"今月の目標を達成しています！",
+        body:`役員以上アポは${st.actual1}/${st.target1}件（${pct(st.rate1)}%）で目標達成です。この調子で積み増していきましょう。${sub2}`,
+        meta:`本日時点：${pace.elapsedBiz}/${pace.totalBiz}営業日 経過` };
+    }
+    if(gap >= -0.02){
+      return { tier:"good", icon:"👍", title:"順調なペースです",
+        body:`役員以上アポは${st.actual1}/${st.target1}件（${pct(st.rate1)}%）。本日時点の理論ペース${pct(pace.expectedRatio)}%を上回って（同程度で）進んでいます。${sub2}`,
+        meta:`本日時点：${pace.elapsedBiz}/${pace.totalBiz}営業日 経過 ・ 残り${pace.remainingBiz}営業日` };
+    }
+    if(gap >= -0.15){
+      return { tier:"caution", icon:"⚠️", title:"少しペースが遅れています",
+        body:`役員以上アポは${st.actual1}/${st.target1}件（${pct(st.rate1)}%）。本日時点の理論ペースは${pct(pace.expectedRatio)}%です。残り${pace.remainingBiz}営業日で、あと${remainingTarget1}件（1日あたり約${perDayNeeded.toFixed(1)}件）が目安です。${sub2}`,
+        meta:`本日時点：${pace.elapsedBiz}/${pace.totalBiz}営業日 経過` };
+    }
+    return { tier:"warning", icon:"🚨", title:"このままだと目標未達のおそれがあります",
+      body:`役員以上アポは${st.actual1}/${st.target1}件（${pct(st.rate1)}%）で、本日時点の理論ペース${pct(pace.expectedRatio)}%を${pct(Math.abs(gap))}pt下回っています。残り${pace.remainingBiz}営業日で、あと${remainingTarget1}件（1日あたり約${perDayNeeded.toFixed(1)}件）のペースアップが必要です。${sub2}`,
+      meta:`本日時点：${pace.elapsedBiz}/${pace.totalBiz}営業日 経過` };
+  }
+
+  function adviceCardHtml(st, pace){
+    const a = computeAdvice(st, pace);
+    return `
+      <div class="advice-card tier-${a.tier}" id="adviceCard">
+        <div class="advice-icon" id="adviceIcon">${a.icon}</div>
+        <div>
+          <div class="advice-title" id="adviceTitle">${escapeHtml(a.title)}</div>
+          <div class="advice-body" id="adviceBody">${escapeHtml(a.body)}</div>
+          <div class="advice-meta" id="adviceMeta">${escapeHtml(a.meta)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateAdviceCard(md){
+    const card = $("adviceCard");
+    if(!card) return;
+    const a = computeAdvice(computeStats(md), getPaceInfo());
+    card.className = "advice-card tier-" + a.tier;
+    const icon = $("adviceIcon"); if(icon) icon.textContent = a.icon;
+    const title = $("adviceTitle"); if(title) title.textContent = a.title;
+    const body = $("adviceBody"); if(body) body.textContent = a.body;
+    const meta = $("adviceMeta"); if(meta) meta.textContent = a.meta;
+  }
+
   function switcherCardHtml(data){
     const options = members.length
       ? members.map(m=>{
@@ -828,8 +963,9 @@
 
     const md = data[activeMember] || (data[activeMember]=emptyMemberData());
     const st = computeStats(md);
+    const pace = getPaceInfo();
 
-    $("detailArea").innerHTML = switcherCardHtml(data) + `
+    $("detailArea").innerHTML = switcherCardHtml(data) + adviceCardHtml(st, pace) + `
       <div class="kpi-pair">
         <div class="kpi-box">
           <div class="lbl">役員以上アポ合計</div>
@@ -908,6 +1044,8 @@
       ROWS.forEach((r,ri)=> setText("rowtotal-"+ri, s.rowTotals[r]));
       COLS.forEach((c,ci)=> setText("coltotal-"+ci, s.colTotals[c]));
       setText("grandTotalDisp", s.actual1);
+
+      updateAdviceCard(md);
     }
 
     wireSwitcher(data, key);
@@ -1489,86 +1627,6 @@
     monthCache[key] = fresh;
     scheduleSave(key);
     renderAll();
-  });
-
-  $("exportBtn").addEventListener("click", async ()=>{
-    const key = monthKey(current);
-    const data = await loadMonth(key);
-    let rows = [["メンバー","チーム","役員以上アポ_目標","役員以上アポ_実績","残取得アポ数","割合","→10億以上役員_目標","→10億以上役員_実績"]];
-    members.forEach(m=>{
-      const st = computeStats(data[m]||emptyMemberData());
-      const t = teamOf(m);
-      rows.push([m, t?t.name:"未配属", st.target1, st.actual1, st.remain1, st.target1>0? (Math.round(st.rate1*1000)/10)+"%":"", st.target2, st.actual2]);
-    });
-    const csv = "\uFEFF" + rows.map(r=>r.join(",")).join("\n");
-    const blob = new Blob([csv], {type:"text/csv"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `AP_KPI_${key}.csv`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  // ---------- full backup / restore (safety net) ----------
-  // Bundles members, teams, assignments, and every month's data into one JSON file.
-  // Recommended before republishing this app, in case anything doesn't carry over cleanly.
-  $("backupBtn").addEventListener("click", async ()=>{
-    const btn = $("backupBtn");
-    const original = btn.textContent;
-    btn.textContent = "収集中…"; btn.disabled = true;
-    try{
-      const backup = { exportedAt: new Date().toISOString(), members: [], teams: [], assignments: {}, months: {} };
-      try{ backup.members = await apiGet("members"); }catch(e){}
-      try{ backup.teams = await apiGet("teams"); }catch(e){}
-      try{ backup.assignments = await apiGet("assignments"); }catch(e){}
-      try{
-        const keys = await apiGet("months"); // list of "YYYY-MM" strings that have data
-        for(const k of (keys || [])){
-          try{ backup.months[k] = await apiGet("month", { key: k }); }catch(e){}
-        }
-      }catch(e){}
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `AP_KPI_backup_${monthKey(current)}.json`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } finally {
-      btn.textContent = original; btn.disabled = false;
-    }
-  });
-
-  $("restoreBtn").addEventListener("click", ()=> $("restoreFile").click());
-  $("restoreFile").addEventListener("change", async e=>{
-    const file = e.target.files[0];
-    e.target.value = "";
-    if(!file) return;
-    let backup;
-    try{
-      const text = await file.text();
-      backup = JSON.parse(text);
-    }catch(err){
-      alert("このファイルを読み込めませんでした。バックアップ用のJSONファイルを選択してください。");
-      return;
-    }
-    const monthCount = backup.months ? Object.keys(backup.months).length : 0;
-    const memberCount = Array.isArray(backup.members) ? backup.members.length : 0;
-    if(!confirm(`このバックアップ(${backup.exportedAt || "日時不明"})から復元します。\nメンバー ${memberCount}名 / ${monthCount}ヶ月分のデータ\n\n現在スプレッドシートに保存されているデータは、バックアップの内容で上書きされます。よろしいですか？`)) return;
-
-    try{
-      await apiPost("restoreBackup", { backup: backup });
-      if(Array.isArray(backup.members)) members = backup.members;
-      if(Array.isArray(backup.teams)) teams = backup.teams;
-      if(backup.assignments) assignments = backup.assignments;
-      monthCache = {}; // force fresh reads for any month the user views next
-      dirtyMembersByMonth = {};
-      members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
-      if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
-      alert("復元が完了しました。");
-      renderAll();
-    }catch(err){
-      alert("復元中にエラーが発生しました。もう一度お試しください。");
-    }
   });
 
   // ---------- manual refresh ----------
