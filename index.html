@@ -100,6 +100,17 @@
     #refreshBtn.spinning .refresh-ic{ animation:none !important; }
   }
 
+  .conn-error-banner{
+    background:#FFF4E5; border-bottom:1px solid #FFD9A0; color:#8A5300;
+    padding:10px 24px; font-size:12.5px; font-weight:700; text-align:center;
+    display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap;
+  }
+  .conn-error-banner button{
+    background:#8A5300; border:none; color:#fff; font-weight:800; border-radius:8px;
+    padding:5px 12px; cursor:pointer; font-size:11.5px; font-family:inherit;
+  }
+  .conn-error-banner button:hover{ background:#6E4200; }
+
 
   .tabs-top{
     display:flex; gap:4px; overflow-x:auto; padding-bottom:0; margin-top:2px;
@@ -209,12 +220,31 @@
   /* overview strip */
   .overview-grid{ display:flex; flex-direction:column; gap:10px; }
   .ov-row{
-    display:grid; grid-template-columns:130px 1fr 96px 150px; gap:16px; align-items:center;
+    display:grid; grid-template-columns:40px 130px 1fr 96px 150px; gap:16px; align-items:center;
     padding:11px 14px; border-radius:14px; background:var(--panel-2); border:1.5px solid transparent;
     cursor:pointer; transition:.13s;
   }
   .ov-row:hover{ border-color:var(--line); }
   .ov-row.active{ border-color:var(--teal); background:var(--teal-glow); }
+  .rank-badge{ font-size:13px; font-weight:800; color:var(--text-faint); text-align:center; }
+  .ov-row.rank-1{
+    padding:16px 18px;
+    background:linear-gradient(120deg, rgba(255,196,0,0.16), rgba(255,171,46,0.06));
+    border-color:rgba(255,196,0,0.55);
+    box-shadow:0 10px 26px -14px rgba(255,171,46,0.55);
+  }
+  .ov-row.rank-1 .rank-badge{ font-size:26px; }
+  .ov-row.rank-1 .ov-name{ font-size:15.5px; }
+  .ov-row.rank-2{
+    background:linear-gradient(120deg, rgba(180,185,200,0.20), rgba(160,165,185,0.06));
+    border-color:rgba(170,175,195,0.5);
+  }
+  .ov-row.rank-2 .rank-badge{ font-size:21px; }
+  .ov-row.rank-3{
+    background:linear-gradient(120deg, rgba(214,144,74,0.18), rgba(190,120,55,0.06));
+    border-color:rgba(205,140,75,0.5);
+  }
+  .ov-row.rank-3 .rank-badge{ font-size:19px; }
   .ov-name{ font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:6px; color:var(--text); }
   .ov-name .sm{ display:block; font-size:10.5px; font-weight:500; color:var(--text-dim); margin-top:1px;}
   .team-chip{
@@ -430,7 +460,7 @@
     .brand{ width:100%; }
     .status-cluster{ width:100%; }
     .main{ padding:20px; }
-    .ov-row{ grid-template-columns:100px 1fr 70px; }
+    .ov-row{ grid-template-columns:28px 100px 1fr 70px; }
     .strip{ display:none; }
     .kpi-pair{ grid-template-columns:1fr; }
     .switcher-card{ flex-direction:column; align-items:stretch; }
@@ -466,12 +496,17 @@
 
     <nav class="tabs-top" id="tabsNav">
       <button class="tab-btn" data-tab="teamProgress"><span class="ic">▤</span>チーム別進捗</button>
-      <button class="tab-btn" data-tab="overview"><span class="ic">◎</span>チーム概況</button>
+      <button class="tab-btn" data-tab="overview"><span class="ic">🏆</span>アポランキング</button>
       <button class="tab-btn" data-tab="detail"><span class="ic">✎</span>個別入力</button>
       <button class="tab-btn" data-tab="teams"><span class="ic">⇄</span>チーム配置</button>
       <button class="tab-btn" data-tab="targets"><span class="ic">🎯</span>目標一括設定 <span style="font-size:10px;opacity:.7;">🔒</span></button>
     </nav>
   </header>
+
+  <div id="connErrorBanner" class="conn-error-banner" style="display:none;">
+    ⚠️ スプレッドシートに接続できませんでした。表示中の内容は最新ではない可能性があります(データが消えたわけではありません)。
+    <button id="connRetryBtn">🔄 再試行</button>
+  </div>
 
   <main class="main">
     <div class="topbar">
@@ -614,12 +649,17 @@
     throw lastErr;
   }
 
+  let apiUnreachable = false; // true only when a fetch genuinely failed (not just "empty")
+
   async function loadMembers(){
     try{
       const arr = await apiGet("members");
-      if(Array.isArray(arr) && arr.length) return arr;
-    }catch(e){}
-    return DEFAULT_MEMBERS.slice();
+      apiUnreachable = false;
+      return Array.isArray(arr) ? arr : []; // trust a real (even empty) result — don't mask it
+    }catch(e){
+      apiUnreachable = true;
+      return DEFAULT_MEMBERS.slice(); // placeholder only, so the UI isn't entirely blank
+    }
   }
   // Adds one member via the API. The Apps Script side only appends/updates that one row,
   // so this can never clobber members added by someone else in the meantime.
@@ -635,9 +675,15 @@
   async function loadTeams(){
     try{
       const arr = await apiGet("teams");
+      apiUnreachable = false;
+      // The Apps Script side auto-seeds two default teams if the sheet is empty, so a
+      // reachable call should never legitimately return zero teams — fall back only here.
       if(Array.isArray(arr) && arr.length) return arr;
-    }catch(e){}
-    return DEFAULT_TEAMS.map(t=>({...t}));
+      return DEFAULT_TEAMS.map(t=>({...t}));
+    }catch(e){
+      apiUnreachable = true;
+      return DEFAULT_TEAMS.map(t=>({...t}));
+    }
   }
   async function saveTeamChange(editedTeam){
     const byId = {}; teams.forEach(t=>byId[t.id]=t); byId[editedTeam.id] = editedTeam;
@@ -648,9 +694,12 @@
   async function loadAssignments(){
     try{
       const obj = await apiGet("assignments");
-      if(obj && typeof obj === "object") return obj;
-    }catch(e){}
-    return {};
+      apiUnreachable = false;
+      return (obj && typeof obj === "object") ? obj : {};
+    }catch(e){
+      apiUnreachable = true;
+      return {};
+    }
   }
   async function saveAssignmentChange(memberName, teamId){
     assignments[memberName] = teamId;
@@ -666,12 +715,21 @@
   async function loadMonth(key){
     if(monthCache[key]) return monthCache[key];
     let data = {};
+    let fetchFailed = false;
     try{
       const obj = await apiGet("month", { key: key });
+      apiUnreachable = false;
       if(obj && typeof obj === "object") data = obj;
-    }catch(e){ data = {}; }
+    }catch(e){
+      apiUnreachable = true;
+      fetchFailed = true;
+      data = {};
+    }
     members.forEach(m=>{ if(!data[m]) data[m] = emptyMemberData(); });
-    monthCache[key] = data;
+    // Only cache a successful (even if genuinely empty) result. Caching a failed fetch would
+    // permanently show all-zero targets/actuals for this month until a manual refresh —
+    // which looked exactly like "my data disappeared" even though nothing was actually lost.
+    if(!fetchFailed) monthCache[key] = data;
     return data;
   }
   function flagSaving(){
@@ -740,6 +798,9 @@
     else if(activeTab === "targets") renderTargetsTab(data, key);
     else if(activeTab === "teams") renderTeamsTab(data);
     else if(activeTab === "teamProgress") renderTeamProgressTab(data);
+
+    const banner = $("connErrorBanner");
+    if(banner) banner.style.display = apiUnreachable ? "flex" : "none";
   }
 
   // Deletes a member entirely (used by the dropdown switcher in the 個別入力 tab).
@@ -763,8 +824,8 @@
 
   // ---------- TAB: overview ----------
   async function renderOverviewTab(data, key){
-    $("pageTitle").textContent = "チーム概況";
-    $("pageDesc").textContent = "役員以上アポ 達成率順 · メンバーをタップして個別入力へ";
+    $("pageTitle").textContent = "アポランキング";
+    $("pageDesc").textContent = "役員以上アポ 達成率ランキング · メンバーをタップして個別入力へ";
     const disp = monthDisplay(current);
 
     const stripData = {};
@@ -783,12 +844,16 @@
       bodyHtml = `<div class="empty-state"><h3>メンバーがいません</h3><div>左のサイドバーから追加してください。</div></div>`;
     } else {
       const ranked = members.slice().sort((a,b)=> computeStats(data[b]||emptyMemberData()).rate1 - computeStats(data[a]||emptyMemberData()).rate1);
-      bodyHtml = ranked.map(m=>{
+      const medal = rank => rank===1 ? "🥇" : rank===2 ? "🥈" : rank===3 ? "🥉" : rank;
+      bodyHtml = ranked.map((m, idx)=>{
+        const rank = idx+1;
         const st = computeStats(data[m]||emptyMemberData());
         const t = teamOf(m);
         const pct = Math.min(st.rate1,1)*100;
+        const rankClass = rank<=3 ? ` rank-${rank}` : "";
         return `
-        <div class="ov-row" data-m="${escapeAttr(m)}">
+        <div class="ov-row${rankClass}" data-m="${escapeAttr(m)}">
+          <div class="rank-badge">${medal(rank)}</div>
           <div class="ov-name">${escapeHtml(m)}${t?`<span class="team-chip" style="background:${t.color.replace('var(','rgba(').includes('rgba')? '' : ''}${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:''}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${rateColor(st.rate1)}"></div></div>
           <div class="ov-num"><b>${st.actual1}</b> / ${st.target1||"–"}</div>
@@ -803,7 +868,7 @@
 
     $("detailArea").innerHTML = `
       <div class="card">
-        <div class="card-head"><h3>役員以上アポ 達成状況</h3><span class="tag">${disp.yr}年${disp.mo}月</span></div>
+        <div class="card-head"><h3>🏆 役員以上アポ ランキング</h3><span class="tag">${disp.yr}年${disp.mo}月</span></div>
         <div class="overview-grid">${bodyHtml}</div>
       </div>
     `;
@@ -1523,6 +1588,7 @@
           ${unassigned.map(m=>{
             const st = computeStats(data[m]||emptyMemberData());
             return `<div class="ov-row" data-m="${escapeAttr(m)}">
+              <div></div>
               <div class="ov-name">${escapeHtml(m)}</div>
               <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate1,1)*100}%;background:${rateColor(st.rate1)}"></div></div>
               <div class="ov-num"><b>${st.actual1}</b> / ${st.target1||"–"}</div>
@@ -1672,6 +1738,7 @@
   }
 
   $("refreshBtn").addEventListener("click", refreshCurrentView);
+  $("connRetryBtn").addEventListener("click", refreshCurrentView);
 
   // ---------- init ----------
   (async function init(){
