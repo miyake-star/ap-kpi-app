@@ -834,30 +834,30 @@
         <div class="kpi-box">
           <div class="lbl">役員以上アポ合計</div>
           <div class="kpi-nums">
-            <span class="actual" style="color:${rateColor(st.rate1)}">${st.actual1}</span>
+            <span class="actual" id="actual1Disp" style="color:${rateColor(st.rate1)}">${st.actual1}</span>
             <span class="slash">/</span>
             <input type="number" min="0" class="target-input" id="t1input" value="${st.target1}">
             <span style="font-size:11px;color:var(--text-faint)">目標</span>
           </div>
           <div class="kpi-meta">
-            <div>残取得アポ数<b style="color:${st.remain1>0?'var(--warn)':'var(--ok)'}">${st.remain1>0? '−'+st.remain1 : (st.remain1===0?'0':'+'+Math.abs(st.remain1))}</b></div>
-            <div>割合<b>${st.target1>0? Math.round(st.rate1*100)+'%' : '–'}</b></div>
+            <div>残取得アポ数<b id="remain1Disp" style="color:${st.remain1>0?'var(--warn)':'var(--ok)'}">${st.remain1>0? '−'+st.remain1 : (st.remain1===0?'0':'+'+Math.abs(st.remain1))}</b></div>
+            <div>割合<b id="rate1Disp">${st.target1>0? Math.round(st.rate1*100)+'%' : '–'}</b></div>
           </div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate1,1)*100}%;background:${rateColor(st.rate1)}"></div></div>
+          <div class="bar-track"><div class="bar-fill" id="bar1Fill" style="width:${Math.min(st.rate1,1)*100}%;background:${rateColor(st.rate1)}"></div></div>
         </div>
         <div class="kpi-box">
           <div class="lbl">→10億以上役員</div>
           <div class="kpi-nums">
-            <span class="actual" style="color:${rateColor(st.rate2)}">${st.actual2}</span>
+            <span class="actual" id="actual2Disp" style="color:${rateColor(st.rate2)}">${st.actual2}</span>
             <span class="slash">/</span>
             <input type="number" min="0" class="target-input" id="t2input" value="${st.target2}">
             <span style="font-size:11px;color:var(--text-faint)">目標</span>
           </div>
           <div class="kpi-meta">
-            <div>残取得アポ数<b style="color:${st.remain2>0?'var(--warn)':'var(--ok)'}">${st.remain2>0? '−'+st.remain2 : (st.remain2===0?'0':'+'+Math.abs(st.remain2))}</b></div>
-            <div>割合<b>${st.target2>0? Math.round(st.rate2*100)+'%' : '–'}</b></div>
+            <div>残取得アポ数<b id="remain2Disp" style="color:${st.remain2>0?'var(--warn)':'var(--ok)'}">${st.remain2>0? '−'+st.remain2 : (st.remain2===0?'0':'+'+Math.abs(st.remain2))}</b></div>
+            <div>割合<b id="rate2Disp">${st.target2>0? Math.round(st.rate2*100)+'%' : '–'}</b></div>
           </div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.min(st.rate2,1)*100}%;background:${rateColor(st.rate2)}"></div></div>
+          <div class="bar-track"><div class="bar-fill" id="bar2Fill" style="width:${Math.min(st.rate2,1)*100}%;background:${rateColor(st.rate2)}"></div></div>
         </div>
       </div>
 
@@ -866,28 +866,73 @@
         <table class="matrix">
           <thead><tr><th></th>${COLS.map(c=>`<th>${c}</th>`).join("")}<th>行計</th></tr></thead>
           <tbody>
-            ${ROWS.map(r=>`
+            ${ROWS.map((r,ri)=>`
               <tr>
                 <th>${r}</th>
                 ${COLS.map(c=>`<td><input type="number" min="0" data-row="${escapeAttr(r)}" data-col="${escapeAttr(c)}" value="${md.matrix[r][c]||0}"></td>`).join("")}
-                <td class="rowtotal">${st.rowTotals[r]}</td>
+                <td class="rowtotal" id="rowtotal-${ri}">${st.rowTotals[r]}</td>
               </tr>`).join("")}
           </tbody>
-          <tfoot><tr><th>列計</th>${COLS.map(c=>`<td class="coltotal">${st.colTotals[c]}</td>`).join("")}<td>${st.actual1}</td></tr></tfoot>
+          <tfoot><tr><th>列計</th>${COLS.map((c,ci)=>`<td class="coltotal" id="coltotal-${ci}">${st.colTotals[c]}</td>`).join("")}<td id="grandTotalDisp">${st.actual1}</td></tr></tfoot>
         </table>
         <div class="note"><b>入力ルール：</b>マトリクスのセルと目標欄のみ入力してください。実績・残取得アポ数・割合は自動計算されます（元シートの「太字枠内のみ入力」ルールを踏襲）。</div>
+        <div style="display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:16px;">
+          <span id="manualSaveHint" style="font-size:11px;color:var(--text-faint);"></span>
+          <button class="pop-btn" id="manualSaveBtn">💾 今すぐ保存</button>
+        </div>
       </div>
     `;
 
+    // Recomputes and updates only the read-only computed displays (actual/残り/割合/バー/
+    // 行計・列計) without touching any <input> element. This is what change handlers call
+    // now instead of a full renderAll() — a full rebuild used to reset the *value* of any
+    // input the user had just typed into but not yet confirmed (blurred), which is what was
+    // making the 目標 field appear to "randomly" clear itself while editing other cells.
+    function refreshComputedDisplay(){
+      const s = computeStats(md);
+      const setText = (id, text)=>{ const el = $(id); if(el) el.textContent = text; };
+      const setColor = (id, color)=>{ const el = $(id); if(el) el.style.color = color; };
+
+      setText("actual1Disp", s.actual1); setColor("actual1Disp", rateColor(s.rate1));
+      setText("actual2Disp", s.actual2); setColor("actual2Disp", rateColor(s.rate2));
+      setText("remain1Disp", s.remain1>0? '−'+s.remain1 : (s.remain1===0?'0':'+'+Math.abs(s.remain1)));
+      setColor("remain1Disp", s.remain1>0?'var(--warn)':'var(--ok)');
+      setText("rate1Disp", s.target1>0? Math.round(s.rate1*100)+'%' : '–');
+      setText("remain2Disp", s.remain2>0? '−'+s.remain2 : (s.remain2===0?'0':'+'+Math.abs(s.remain2)));
+      setColor("remain2Disp", s.remain2>0?'var(--warn)':'var(--ok)');
+      setText("rate2Disp", s.target2>0? Math.round(s.rate2*100)+'%' : '–');
+
+      const bar1 = $("bar1Fill"); if(bar1){ bar1.style.width = Math.min(s.rate1,1)*100+'%'; bar1.style.background = rateColor(s.rate1); }
+      const bar2 = $("bar2Fill"); if(bar2){ bar2.style.width = Math.min(s.rate2,1)*100+'%'; bar2.style.background = rateColor(s.rate2); }
+
+      ROWS.forEach((r,ri)=> setText("rowtotal-"+ri, s.rowTotals[r]));
+      COLS.forEach((c,ci)=> setText("coltotal-"+ci, s.colTotals[c]));
+      setText("grandTotalDisp", s.actual1);
+    }
+
     wireSwitcher(data, key);
-    $("t1input").addEventListener("change", e=>{ md.target1 = Number(e.target.value)||0; markDirty(key, activeMember); scheduleSave(key); renderAll(); });
-    $("t2input").addEventListener("change", e=>{ md.target2 = Number(e.target.value)||0; markDirty(key, activeMember); scheduleSave(key); renderAll(); });
+    $("t1input").addEventListener("change", e=>{
+      md.target1 = Number(e.target.value)||0;
+      markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
+    });
+    $("t2input").addEventListener("change", e=>{
+      md.target2 = Number(e.target.value)||0;
+      markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
+    });
     document.querySelectorAll("table.matrix input").forEach(inp=>{
       inp.addEventListener("change", e=>{
         const r = e.target.dataset.row, c = e.target.dataset.col;
         md.matrix[r][c] = Number(e.target.value)||0;
-        markDirty(key, activeMember); scheduleSave(key); renderAll();
+        markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
       });
+    });
+
+    $("manualSaveBtn").addEventListener("click", async ()=>{
+      const hint = $("manualSaveHint");
+      markDirty(key, activeMember);
+      clearTimeout(saveTimer); saveTimer = null;
+      await flushMonthSave(key);
+      if(hint){ hint.textContent = "送信しました"; setTimeout(()=>{ if(hint) hint.textContent = ""; }, 2000); }
     });
   }
 
