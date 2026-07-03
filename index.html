@@ -276,6 +276,10 @@
     font-family:inherit;
   }
   .target-input:focus{ outline:none; border-color:var(--teal); }
+  .target-display{
+    display:inline-block; min-width:44px; background:var(--panel-2); border:1.5px solid var(--line-soft);
+    border-radius:8px; color:var(--text-dim); font-weight:800; font-size:13px; text-align:center; padding:5px 8px;
+  }
   .kpi-box .bar-track{ margin-top:14px; height:7px; }
 
   /* matrix */
@@ -565,8 +569,7 @@
   let activeMember = null;
   let activeTab = "teamProgress";
   let monthCache = {};
-  let saveTimer = null;
-  let saveInFlight = false; // true for the whole save round-trip, not just the debounce wait
+  let saveInFlight = false; // true for the whole duration of a save request
   let dragMember = null;
   let bulkSelected = null; // Set of member names selected for bulk-apply; null = not yet initialized
 
@@ -745,6 +748,11 @@
     if(!fetchFailed) monthCache[key] = data;
     return data;
   }
+  function flagDirty(){
+    $("saveFlag").textContent = "未保存の変更あり";
+    const pip = $("saveFlag").parentElement.querySelector(".pip");
+    if(pip) pip.style.background = "var(--warn)";
+  }
   function flagSaving(){
     $("saveFlag").textContent = "保存中…";
     const pip = $("saveFlag").parentElement.querySelector(".pip");
@@ -755,9 +763,17 @@
     const pip = $("saveFlag").parentElement.querySelector(".pip");
     if(pip) pip.style.background = "var(--ok)";
   }
+  // Marks a member's data as edited-but-not-yet-sent. This no longer schedules any automatic
+  // network call — saves now only happen on an explicit action (Enter key, a save button, or
+  // navigating away) so typing doesn't trigger a request on every field.
   function markDirty(key, memberName){
     if(!dirtyMembersByMonth[key]) dirtyMembersByMonth[key] = new Set();
     dirtyMembersByMonth[key].add(memberName);
+    flagDirty();
+  }
+  function hasDirty(key){
+    const d = dirtyMembersByMonth[key];
+    return !!(d && d.size > 0);
   }
   // Sends only the members that were actually edited locally. The Apps Script side updates
   // just those rows in the "monthly" sheet (find-or-append), under a script lock, so it
@@ -768,6 +784,7 @@
     const local = monthCache[key] || {};
     const payload = {};
     dirty.forEach(m=>{ if(local[m]) payload[m] = local[m]; });
+    flagSaving();
     saveInFlight = true;
     try{
       await apiPost("saveMonth", { key: key, members: payload });
@@ -779,34 +796,29 @@
       saveInFlight = false;
     }
   }
-  function scheduleSave(key){
-    flagSaving();
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(()=>{ saveTimer = null; flushMonthSave(key); }, 350);
+  // Used by explicit "save now" actions (button click, Enter key) — always attempts a save
+  // regardless of whether anything is tracked dirty yet, in case the caller just marked
+  // something dirty a moment before calling this.
+  function saveNow(key){
+    return flushMonthSave(key);
   }
-  // Forces any pending debounced save to write immediately — called before navigating away
-  // within the app (month change, tab switch, manual refresh) so nothing typed is ever lost.
+  // Safety net only — called before navigating away within the app (month change, tab
+  // switch, manual refresh) so an edit someone forgot to explicitly save isn't lost.
   // NOTE: this uses fetch() and is NOT safe to rely on for actual page unload — browsers do
   // not guarantee an in-flight fetch finishes once the page starts navigating away. Use
   // beaconFlush() (below) for that case instead.
   function flushPendingSave(){
-    if(saveTimer){
-      clearTimeout(saveTimer);
-      saveTimer = null;
-      return flushMonthSave(monthKey(current));
-    }
+    const key = monthKey(current);
+    if(hasDirty(key)) return flushMonthSave(key);
     return Promise.resolve();
   }
 
-  // A page reload/close can happen before the normal debounced fetch() save has a chance to
-  // run or complete — the browser is free to abandon it mid-flight. navigator.sendBeacon is
-  // the one API browsers specifically guarantee will still attempt delivery even as the page
-  // is being torn down, so this is what actually protects "typed something, then immediately
-  // hit refresh" from silently losing that edit.
+  // A page reload/close can happen before a save has a chance to run or complete — the
+  // browser is free to abandon an in-flight fetch mid-request. navigator.sendBeacon is the
+  // one API browsers specifically guarantee will still attempt delivery even as the page is
+  // being torn down, so this is what actually protects an unsaved edit from being lost if
+  // someone closes the tab (or it auto-locks, etc.) without explicitly saving first.
   function beaconFlush(){
-    if(!saveTimer) return; // nothing pending
-    clearTimeout(saveTimer);
-    saveTimer = null;
     const key = monthKey(current);
     const dirty = dirtyMembersByMonth[key];
     if(!dirty || dirty.size === 0) return;
@@ -1081,7 +1093,7 @@
           <div class="kpi-nums">
             <span class="actual" id="actual1Disp" style="color:${rateColor(st.rate1)}">${st.actual1}</span>
             <span class="slash">/</span>
-            <input type="number" min="0" class="target-input" id="t1input" value="${st.target1}">
+            <span class="target-display" id="t1Display">${st.target1}</span>
             <span style="font-size:11px;color:var(--text-faint)">目標</span>
           </div>
           <div class="kpi-meta">
@@ -1095,7 +1107,7 @@
           <div class="kpi-nums">
             <span class="actual" id="actual2Disp" style="color:${rateColor(st.rate2)}">${st.actual2}</span>
             <span class="slash">/</span>
-            <input type="number" min="0" class="target-input" id="t2input" value="${st.target2}">
+            <span class="target-display" id="t2Display">${st.target2}</span>
             <span style="font-size:11px;color:var(--text-faint)">目標</span>
           </div>
           <div class="kpi-meta">
@@ -1120,7 +1132,7 @@
           </tbody>
           <tfoot><tr><th>列計</th>${COLS.map((c,ci)=>`<td class="coltotal" id="coltotal-${ci}">${st.colTotals[c]}</td>`).join("")}<td id="grandTotalDisp">${st.actual1}</td></tr></tfoot>
         </table>
-        <div class="note"><b>入力ルール：</b>マトリクスのセルと目標欄のみ入力してください。実績・残取得アポ数・割合は自動計算されます（元シートの「太字枠内のみ入力」ルールを踏襲）。</div>
+        <div class="note"><b>入力ルール：</b>マトリクスのセルのみ入力してください。実績・残取得アポ数・割合は自動計算されます。目標値は「目標一括設定」タブ(パスコード保護)からのみ変更できます。</div>
         <div style="display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:16px;">
           <span id="manualSaveHint" style="font-size:11px;color:var(--text-faint);"></span>
           <button class="pop-btn" id="manualSaveBtn">💾 今すぐ保存</button>
@@ -1158,27 +1170,21 @@
     }
 
     wireSwitcher(data, key);
-    $("t1input").addEventListener("change", e=>{
-      md.target1 = Number(e.target.value)||0;
-      markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
-    });
-    $("t2input").addEventListener("change", e=>{
-      md.target2 = Number(e.target.value)||0;
-      markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
-    });
     document.querySelectorAll("table.matrix input").forEach(inp=>{
       inp.addEventListener("change", e=>{
         const r = e.target.dataset.row, c = e.target.dataset.col;
         md.matrix[r][c] = Number(e.target.value)||0;
-        markDirty(key, activeMember); scheduleSave(key); refreshComputedDisplay();
+        markDirty(key, activeMember); refreshComputedDisplay();
+      });
+      inp.addEventListener("keydown", e=>{
+        if(e.key === "Enter"){ e.preventDefault(); inp.blur(); saveNow(key); }
       });
     });
 
     $("manualSaveBtn").addEventListener("click", async ()=>{
       const hint = $("manualSaveHint");
       markDirty(key, activeMember);
-      clearTimeout(saveTimer); saveTimer = null;
-      await flushMonthSave(key);
+      await saveNow(key);
       if(hint){ hint.textContent = "送信しました"; setTimeout(()=>{ if(hint) hint.textContent = ""; }, 2000); }
     });
   }
@@ -1293,31 +1299,37 @@
       inp.addEventListener("change", e=>{
         const m = e.target.dataset.m;
         (data[m] || (data[m]=emptyMemberData())).target1 = Number(e.target.value)||0;
-        markDirty(key, m); scheduleSave(key);
+        markDirty(key, m);
+      });
+      inp.addEventListener("keydown", e=>{
+        if(e.key === "Enter"){ e.preventDefault(); inp.blur(); saveNow(key); }
       });
     });
     document.querySelectorAll(".row-t2").forEach(inp=>{
       inp.addEventListener("change", e=>{
         const m = e.target.dataset.m;
         (data[m] || (data[m]=emptyMemberData())).target2 = Number(e.target.value)||0;
-        markDirty(key, m); scheduleSave(key);
+        markDirty(key, m);
+      });
+      inp.addEventListener("keydown", e=>{
+        if(e.key === "Enter"){ e.preventDefault(); inp.blur(); saveNow(key); }
       });
     });
 
-    $("bulkApply1").addEventListener("click", ()=>{
+    $("bulkApply1").addEventListener("click", async ()=>{
       const val = Number($("bulkVal1").value);
       if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
       if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
       bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target1 = val; markDirty(key, m); });
-      scheduleSave(key);
+      await saveNow(key);
       renderAll();
     });
-    $("bulkApply2").addEventListener("click", ()=>{
+    $("bulkApply2").addEventListener("click", async ()=>{
       const val = Number($("bulkVal2").value);
       if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
       if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
       bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target2 = val; markDirty(key, m); });
-      scheduleSave(key);
+      await saveNow(key);
       renderAll();
     });
   }
@@ -1768,7 +1780,7 @@
     const fresh = {};
     members.forEach(m=>{ fresh[m] = emptyMemberData(); markDirty(key, m); });
     monthCache[key] = fresh;
-    scheduleSave(key);
+    await saveNow(key);
     renderAll();
   });
 
