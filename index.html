@@ -564,6 +564,7 @@
   let members = [];
   let teams = [];
   let assignments = {}; // memberName -> teamId | null
+  let memberRanks = {}; // memberName -> "AP" | "AN" | "AS" | "C" | null
   let current = new Date();
   current.setDate(1);
   let activeMember = null;
@@ -715,6 +716,24 @@
     }catch(e){
       apiUnreachable = true;
       return {};
+    }
+  }
+  // Fetches members + teams + assignments in a single request instead of three separate
+  // round trips. Apps Script Web Apps are relatively slow per-request (often 1–3s each), so
+  // collapsing three sequential calls into one is the single biggest lag reduction available
+  // for the initial load and the manual refresh button.
+  async function loadAll(){
+    try{
+      const obj = await apiGet("all");
+      apiUnreachable = false;
+      return {
+        members: Array.isArray(obj.members) ? obj.members : [],
+        teams: (Array.isArray(obj.teams) && obj.teams.length) ? obj.teams : DEFAULT_TEAMS.map(t=>({...t})),
+        assignments: (obj.assignments && typeof obj.assignments === "object") ? obj.assignments : {}
+      };
+    }catch(e){
+      apiUnreachable = true;
+      return { members: DEFAULT_MEMBERS.slice(), teams: DEFAULT_TEAMS.map(t=>({...t})), assignments: {} };
     }
   }
   async function saveAssignmentChange(memberName, teamId){
@@ -891,15 +910,19 @@
     $("pageDesc").textContent = "役員以上アポ 達成率ランキング · メンバーをタップして個別入力へ";
     const disp = monthDisplay(current);
 
+    const monthKeys = [];
+    for(let i=STRIP_MONTHS-1;i>=0;i--) monthKeys.push(monthKeyOffset(current, -i));
+    // Fetch all 6 months at once instead of one at a time — loadMonth() caches per key, so this
+    // used to mean up to 6 sequential network round trips before the ranking could even render.
+    await Promise.all(monthKeys.map(k => loadMonth(k)));
+
     const stripData = {};
     for(const m of members){
-      stripData[m] = [];
-      for(let i=STRIP_MONTHS-1;i>=0;i--){
-        const k = monthKeyOffset(current, -i);
-        const md = await loadMonth(k);
+      stripData[m] = monthKeys.map(k=>{
+        const md = monthCache[k] || {};
         const st = computeStats(md[m] || emptyMemberData());
-        stripData[m].push({key:k, rate:st.rate1, hasTarget: st.target1>0, isNow: k===key});
-      }
+        return {key:k, rate:st.rate1, hasTarget: st.target1>0, isNow: k===key};
+      });
     }
 
     let bodyHtml;
@@ -1317,17 +1340,23 @@
     });
 
     $("bulkApply1").addEventListener("click", async ()=>{
-      const val = Number($("bulkVal1").value);
+      const raw = $("bulkVal1").value;
+      if(raw.trim() === ""){ alert("数値を入力してください（空欄のまま適用はできません）"); return; }
+      const val = Number(raw);
       if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
       if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
+      if(!confirm(`選択中の${bulkSelected.size}名の「役員以上アポ 目標」を、${val}件に一括で書き換えます。よろしいですか？`)) return;
       bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target1 = val; markDirty(key, m); });
       await saveNow(key);
       renderAll();
     });
     $("bulkApply2").addEventListener("click", async ()=>{
-      const val = Number($("bulkVal2").value);
+      const raw = $("bulkVal2").value;
+      if(raw.trim() === ""){ alert("数値を入力してください（空欄のまま適用はできません）"); return; }
+      const val = Number(raw);
       if(!Number.isFinite(val) || val < 0){ alert("0以上の数値を入力してください"); return; }
       if(bulkSelected.size === 0){ alert("メンバーを1人以上選択してください"); return; }
+      if(!confirm(`選択中の${bulkSelected.size}名の「→10億以上役員 目標」を、${val}件に一括で書き換えます。よろしいですか？`)) return;
       bulkSelected.forEach(m=>{ (data[m] || (data[m]=emptyMemberData())).target2 = val; markDirty(key, m); });
       await saveNow(key);
       renderAll();
@@ -1810,12 +1839,18 @@
         dirty.forEach(m=>{ if(monthCache[key][m]) preserved[m] = monthCache[key][m]; });
       }
       delete monthCache[key]; // force a fresh read instead of using the cached copy
-      members = await loadMembers();
-      teams = await loadTeams();
-      assignments = await loadAssignments();
+      const [all, monthResult] = await Promise.all([
+        loadAll(),
+        apiGet("month", { key: key }).catch(()=>({}))
+      ]);
+      members = all.members;
+      teams = all.teams;
+      assignments = all.assignments;
       members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
       if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
-      await loadMonth(key);
+      const freshData = (monthResult && typeof monthResult === "object") ? monthResult : {};
+      members.forEach(m=>{ if(!freshData[m]) freshData[m] = emptyMemberData(); });
+      monthCache[key] = freshData;
       Object.keys(preserved).forEach(m=>{ monthCache[key][m] = preserved[m]; });
       await renderAll();
       updateLastUpdatedLabel();
@@ -1846,11 +1881,27 @@
         </div>`;
       return;
     }
-    try{ members = await loadMembers(); }catch(e){ members = DEFAULT_MEMBERS.slice(); }
-    try{ teams = await loadTeams(); }catch(e){ teams = DEFAULT_TEAMS.map(t=>({...t})); }
-    try{ assignments = await loadAssignments(); }catch(e){ assignments = {}; }
+    // Fetch members+teams+assignments (1 call) and the current month's data (1 call) at the
+    // same time instead of four calls in sequence — this is the single biggest lag reduction
+    // available, since Apps Script Web App requests are relatively slow (often 1–3s each) and
+    // previously had to wait for each one to finish before starting the next.
+    const initKey = monthKey(current);
+    const [all, monthResult] = await Promise.all([
+      loadAll(),
+      apiGet("month", { key: initKey }).catch(()=>({}))
+    ]);
+    members = all.members;
+    teams = all.teams;
+    assignments = all.assignments;
     members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
     activeMember = members[0] || null;
+
+    // Pre-seed the month cache with what we already fetched in parallel, so renderAll()'s
+    // own loadMonth() call below is an instant cache hit instead of a second network round trip.
+    const initData = (monthResult && typeof monthResult === "object") ? monthResult : {};
+    members.forEach(m=>{ if(!initData[m]) initData[m] = emptyMemberData(); });
+    monthCache[initKey] = initData;
+
     await renderAll();
     updateLastUpdatedLabel();
   })();
