@@ -514,6 +514,12 @@
     <button id="connRetryBtn">🔄 再試行</button>
   </div>
 
+  <div id="emptyDataBanner" class="conn-error-banner" style="display:none; background:#FFE9EC; border-bottom-color:#FFB3BD; color:#8A1730;">
+    🚨 スプレッドシートには正常に接続できていますが、メンバー・チームのデータが0件です。<br>
+    もし以前は入力済みだったはずの場合、アプリの操作ではなく<b>スプレッドシート自体が直接書き換わった可能性</b>があります。
+    Googleスプレッドシートの「ファイル → 変更履歴 → 変更履歴を表示」で確認・復元してください。
+  </div>
+
   <main class="main">
     <div class="topbar">
       <div>
@@ -532,7 +538,7 @@
 (function(){
   // ▼▼▼ ここにデプロイしたApps ScriptのWebアプリURLを貼り付けてください ▼▼▼
   // (「https://script.google.com/macros/s/.../exec」の形のURLです。セットアップ手順を参照)
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxMCfPgBzwCIyIa-GKPYu8a8rfjGUSZpzS8QzD_ZygG98rTpisliEqqLYLdqZ6rBtRv/exec";
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbybmDiVdc-GPqj5aZhXkhfu8TA0SFmVOhLJ6gFQApThD09_YhOTvsvcPam1NWwm19hv/exec";
   // ▲▲▲ ここまで ▲▲▲
 
   const DEFAULT_MEMBERS = ["力石","濱本","岩井","堀内","浅野","上清田","川上"];
@@ -656,6 +662,7 @@
   }
 
   let apiUnreachable = false; // true only when a fetch genuinely failed (not just "empty")
+  let hasSeenNonEmptyMembers = false; // used to detect "was fine, now empty" mid-session (likely external edit)
 
   async function loadMembers(){
     try{
@@ -778,7 +785,10 @@
     saveTimer = setTimeout(()=>{ saveTimer = null; flushMonthSave(key); }, 350);
   }
   // Forces any pending debounced save to write immediately — called before navigating away
-  // (month change, tab switch, page unload) so nothing typed is ever lost.
+  // within the app (month change, tab switch, manual refresh) so nothing typed is ever lost.
+  // NOTE: this uses fetch() and is NOT safe to rely on for actual page unload — browsers do
+  // not guarantee an in-flight fetch finishes once the page starts navigating away. Use
+  // beaconFlush() (below) for that case instead.
   function flushPendingSave(){
     if(saveTimer){
       clearTimeout(saveTimer);
@@ -787,8 +797,33 @@
     }
     return Promise.resolve();
   }
-  window.addEventListener("beforeunload", flushPendingSave);
-  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") flushPendingSave(); });
+
+  // A page reload/close can happen before the normal debounced fetch() save has a chance to
+  // run or complete — the browser is free to abandon it mid-flight. navigator.sendBeacon is
+  // the one API browsers specifically guarantee will still attempt delivery even as the page
+  // is being torn down, so this is what actually protects "typed something, then immediately
+  // hit refresh" from silently losing that edit.
+  function beaconFlush(){
+    if(!saveTimer) return; // nothing pending
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    const key = monthKey(current);
+    const dirty = dirtyMembersByMonth[key];
+    if(!dirty || dirty.size === 0) return;
+    const local = monthCache[key] || {};
+    const payload = {};
+    dirty.forEach(m=>{ if(local[m]) payload[m] = local[m]; });
+    if(Object.keys(payload).length === 0) return;
+    try{
+      const body = JSON.stringify({ action: "saveMonth", key: key, members: payload });
+      const blob = new Blob([body], { type: "text/plain;charset=UTF-8" });
+      navigator.sendBeacon(GAS_URL, blob);
+      dirtyMembersByMonth[key] = new Set(); // optimistic — a beacon's delivery can't be confirmed, but this is our best shot
+    }catch(e){ /* best effort only */ }
+  }
+  window.addEventListener("beforeunload", beaconFlush);
+  window.addEventListener("pagehide", beaconFlush); // fires more reliably than beforeunload on mobile Safari
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") beaconFlush(); });
 
   // ---------- rendering shell ----------
   async function renderAll(){
@@ -807,6 +842,16 @@
 
     const banner = $("connErrorBanner");
     if(banner) banner.style.display = apiUnreachable ? "flex" : "none";
+
+    // Distinct from a connection failure: the sheet answered fine, but has zero members.
+    // If this app has previously seen real members in *this* session and now sees none,
+    // that's a strong signal something outside the app (a direct sheet edit) wiped it.
+    const emptyBanner = $("emptyDataBanner");
+    if(emptyBanner){
+      const looksWiped = !apiUnreachable && members.length === 0 && hasSeenNonEmptyMembers;
+      emptyBanner.style.display = looksWiped ? "block" : "none";
+    }
+    if(!apiUnreachable && members.length > 0) hasSeenNonEmptyMembers = true;
   }
 
   // Deletes a member entirely (used by the dropdown switcher in the 個別入力 tab).
