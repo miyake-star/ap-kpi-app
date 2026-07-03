@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AP階層アポイントKPI管理</title>
+<title>階層アポイントKPI管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -251,6 +251,18 @@
     font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.02em;
     flex:none;
   }
+  .rank-chip{
+    font-size:9px; font-weight:800; padding:2px 8px; border-radius:20px; letter-spacing:.03em;
+    flex:none;
+  }
+  .rank-select{
+    appearance:none; -webkit-appearance:none; border:1px solid var(--line); border-radius:6px;
+    background:var(--bg); font-size:10px; font-weight:800; padding:3px 16px 3px 6px; cursor:pointer;
+    font-family:inherit; color:var(--text-dim);
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="5"><path d="M0 0l4 5 4-5z" fill="%23A6A9CB"/></svg>');
+    background-repeat:no-repeat; background-position:right 5px center;
+  }
+  .rank-select:focus{ outline:none; border-color:var(--teal); }
   .bar-track{ height:9px; background:var(--track); border-radius:6px; overflow:hidden; }
   .bar-fill{ height:100%; border-radius:6px; transition:width .4s ease; }
   .ov-num{ font-size:12.5px; text-align:right; color:var(--text-dim); }
@@ -485,7 +497,7 @@
   <header class="hero">
     <div class="hero-top">
       <div class="brand">
-        <span class="eyebrow">BridgeOne · AP専用</span>
+        <span class="eyebrow">BridgeOne · 全階層対応</span>
         <h1>アポKPI管理</h1>
       </div>
 
@@ -553,6 +565,20 @@
     { id:"team1", name:"辻チーム", leader:"辻", color:"var(--teal)" },
     { id:"team2", name:"熊倉チーム", leader:"熊倉", color:"var(--gold)" }
   ];
+  // 階層（役職クラス）。AP以外のクラスも扱えるように、代表的な4種を用意しておく。
+  const RANKS = ["AP","AN","AS","C"];
+  const RANK_STYLE = {
+    AP: { bg:"var(--teal-glow)",  fg:"var(--teal-dim)" },
+    AN: { bg:"var(--gold-glow)",  fg:"#B9750A" },
+    AS: { bg:"rgba(139,124,246,0.16)", fg:"#6E5CD9" },
+    C:  { bg:"rgba(91,141,239,0.16)",  fg:"#3F6FCE" }
+  };
+  function rankStyle(rank){ return RANK_STYLE[rank] || { bg:"var(--panel-2)", fg:"var(--text-faint)" }; }
+  function rankChipHtml(rank){
+    if(!rank) return "";
+    const s = rankStyle(rank);
+    return `<span class="rank-chip" style="background:${s.bg};color:${s.fg}">${escapeHtml(rank)}</span>`;
+  }
 
   // Simple client-side lock for the 目標一括設定 / チーム配置 tabs. This is NOT real
   // security — anyone opening dev tools can read this constant or bypass the check — it's
@@ -729,16 +755,21 @@
       return {
         members: Array.isArray(obj.members) ? obj.members : [],
         teams: (Array.isArray(obj.teams) && obj.teams.length) ? obj.teams : DEFAULT_TEAMS.map(t=>({...t})),
-        assignments: (obj.assignments && typeof obj.assignments === "object") ? obj.assignments : {}
+        assignments: (obj.assignments && typeof obj.assignments === "object") ? obj.assignments : {},
+        ranks: (obj.ranks && typeof obj.ranks === "object") ? obj.ranks : {}
       };
     }catch(e){
       apiUnreachable = true;
-      return { members: DEFAULT_MEMBERS.slice(), teams: DEFAULT_TEAMS.map(t=>({...t})), assignments: {} };
+      return { members: DEFAULT_MEMBERS.slice(), teams: DEFAULT_TEAMS.map(t=>({...t})), assignments: {}, ranks: {} };
     }
   }
   async function saveAssignmentChange(memberName, teamId){
     assignments[memberName] = teamId;
     await apiPost("setAssignment", { member: memberName, teamId: teamId });
+  }
+  async function saveMemberRank(memberName, rank){
+    memberRanks[memberName] = rank;
+    await apiPost("setRank", { member: memberName, rank: rank });
   }
   async function saveAssignmentRemove(memberName){
     delete assignments[memberName];
@@ -890,6 +921,7 @@
     if(!confirm(`「${m}」をメンバーから削除しますか？(過去データは保持されます)`)) return;
     await saveMemberRemove(m);
     await saveAssignmentRemove(m);
+    delete memberRanks[m];
     if(activeMember===m) activeMember = members[0] || null;
     renderAll();
   }
@@ -940,7 +972,7 @@
         return `
         <div class="ov-row${rankClass}" data-m="${escapeAttr(m)}">
           <div class="rank-badge">${medal(rank)}</div>
-          <div class="ov-name">${escapeHtml(m)}${t?`<span class="team-chip" style="background:${t.color.replace('var(','rgba(').includes('rgba')? '' : ''}${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:''}</div>
+          <div class="ov-name">${escapeHtml(m)}${rankChipHtml(memberRanks[m])}${t?`<span class="team-chip" style="background:${t.color.replace('var(','rgba(').includes('rgba')? '' : ''}${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:''}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${rateColor(st.rate1)}"></div></div>
           <div class="ov-num"><b>${st.actual1}</b> / ${st.target1||"–"}</div>
           <div class="strip">${stripData[m].map(s=>{
@@ -1063,7 +1095,8 @@
     const options = members.length
       ? members.map(m=>{
           const st = computeStats(data[m]||emptyMemberData());
-          return `<option value="${escapeAttr(m)}" ${m===activeMember?"selected":""}>${escapeHtml(m)} ・ ${Math.round(st.rate1*100)}%</option>`;
+          const r = memberRanks[m] ? `[${memberRanks[m]}] ` : "";
+          return `<option value="${escapeAttr(m)}" ${m===activeMember?"selected":""}>${r}${escapeHtml(m)} ・ ${Math.round(st.rate1*100)}%</option>`;
         }).join("")
       : `<option value="">メンバーがいません</option>`;
     return `
@@ -1282,7 +1315,7 @@
               return `
               <tr data-m="${escapeAttr(m)}">
                 <td><input type="checkbox" class="rowcb" data-m="${escapeAttr(m)}" ${bulkSelected.has(m)?"checked":""}></td>
-                <td><div class="nm-cell"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${rateColor(st.rate1)}"></span>${escapeHtml(m)}${t?`<span class="team-chip" style="background:${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:""}</div></td>
+                <td><div class="nm-cell"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${rateColor(st.rate1)}"></span>${escapeHtml(m)}${rankChipHtml(memberRanks[m])}${t?`<span class="team-chip" style="background:${t.color==='var(--teal)'?'var(--teal-glow)':'var(--gold-glow)'};color:${t.color}">${escapeHtml(t.name)}</span>`:""}</div></td>
                 <td><input type="number" min="0" class="row-t1" data-m="${escapeAttr(m)}" value="${st.target1}"></td>
                 <td class="ref">${st.actual1}件 (${st.target1>0? Math.round(st.rate1*100)+'%':'–'})</td>
                 <td><input type="number" min="0" class="row-t2" data-m="${escapeAttr(m)}" value="${st.target2}"></td>
@@ -1521,9 +1554,14 @@
 
   function cardInnerHtml(m, currentTeamId, cols){
     const otherCols = cols.filter(c => (c.id||null) !== (currentTeamId||null));
+    const currentRank = memberRanks[m] || "";
     return `
       <span class="rate-pip" style="background:var(--teal)"></span>
       <span class="nm">${escapeHtml(m)}</span>
+      <select class="rank-select" data-rank-for="${escapeAttr(m)}" title="階層を設定">
+        <option value="" ${currentRank? "" : "selected"}>階層未設定</option>
+        ${RANKS.map(r=>`<option value="${r}" ${currentRank===r? "selected":""}>${r}</option>`).join("")}
+      </select>
       <div class="move-btns">
         ${otherCols.map(c=>`<button data-move="${escapeAttr(m)}" data-to="${c.id ?? ''}" title="${c.id? teams.find(t=>t.id===c.id).name : '未配属'}へ移動">${c.id? "→" : "×"}</button>`).join("")}
         <button class="del-member-btn" data-del="${escapeAttr(m)}" title="このメンバーを削除">🗑</button>
@@ -1552,6 +1590,13 @@
       btn.addEventListener("click", e=>{
         e.stopPropagation();
         deleteMember(btn.dataset.del);
+      });
+    });
+    card.querySelectorAll("[data-rank-for]").forEach(sel=>{
+      sel.addEventListener("click", e=> e.stopPropagation());
+      sel.addEventListener("change", async e=>{
+        e.stopPropagation();
+        await saveMemberRank(sel.dataset.rankFor, sel.value || null);
       });
     });
   }
@@ -1596,6 +1641,13 @@
         btn.addEventListener("click", e=>{
           e.stopPropagation();
           deleteMember(btn.dataset.del);
+        });
+      });
+      card.querySelectorAll("[data-rank-for]").forEach(sel=>{
+        sel.addEventListener("click", e=> e.stopPropagation());
+        sel.addEventListener("change", async e=>{
+          e.stopPropagation();
+          await saveMemberRank(sel.dataset.rankFor, sel.value || null);
         });
       });
 
@@ -1846,6 +1898,7 @@
       members = all.members;
       teams = all.teams;
       assignments = all.assignments;
+      memberRanks = all.ranks;
       members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
       if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
       const freshData = (monthResult && typeof monthResult === "object") ? monthResult : {};
@@ -1893,6 +1946,7 @@
     members = all.members;
     teams = all.teams;
     assignments = all.assignments;
+    memberRanks = all.ranks;
     members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
     activeMember = members[0] || null;
 
