@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg: #FAFAFF;
@@ -111,36 +110,6 @@
     padding:5px 12px; cursor:pointer; font-size:11.5px; font-family:inherit;
   }
   .conn-error-banner button:hover{ background:#6E4200; }
-
-  /* ---------- login gate ---------- */
-  .login-gate{
-    position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center;
-    background:
-      radial-gradient(900px 460px at 92% -8%, rgba(0,207,193,0.10), transparent 60%),
-      radial-gradient(700px 420px at 4% 8%, rgba(255,111,168,0.09), transparent 60%),
-      var(--bg);
-    padding:24px;
-  }
-  .login-card{
-    background:var(--panel); border-radius:24px; padding:40px 36px; max-width:380px; width:100%;
-    text-align:center; box-shadow:0 30px 60px -20px rgba(35,38,74,0.35); border:1px solid var(--line);
-  }
-  .login-icon{ font-size:44px; margin-bottom:10px; }
-  .login-card h2{ margin:0 0 8px; font-size:19px; }
-  .login-card p{ margin:0 0 22px; font-size:12.5px; color:var(--text-dim); line-height:1.7; }
-  .login-error{ margin-top:14px; font-size:12px; color:var(--bad); font-weight:700; min-height:16px; line-height:1.6; }
-  #googleSignInBtn{ display:flex; justify-content:center; }
-
-  .user-chip{
-    display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim); font-weight:600;
-    background:var(--panel-2); border:1px solid var(--line); border-radius:999px; padding:6px 6px 6px 12px;
-    white-space:nowrap;
-  }
-  .user-chip button{
-    background:var(--panel); border:1px solid var(--line); color:var(--text-faint); cursor:pointer;
-    font-size:10.5px; font-weight:700; font-family:inherit; border-radius:999px; padding:4px 10px;
-  }
-  .user-chip button:hover{ color:var(--bad); border-color:var(--bad); }
 
 
   .tabs-top{
@@ -501,18 +470,7 @@
 </head>
 
 <body>
-
-<div id="loginGate" class="login-gate">
-  <div class="login-card">
-    <div class="login-icon">🔒</div>
-    <h2>BridgeOne社員限定</h2>
-    <p>会社のGoogleアカウント(Google Workspace)でログインしてください。</p>
-    <div id="googleSignInBtn"></div>
-    <div id="loginError" class="login-error"></div>
-  </div>
-</div>
-
-<div class="app" id="appRoot" style="display:none;">
+<div class="app">
 
   <header class="hero">
     <div class="hero-top">
@@ -529,10 +487,6 @@
 
       <div class="status-cluster">
         <span class="shared-flag">🔗 チーム共有</span>
-        <span class="user-chip" id="userChip" style="display:none;">
-          <span id="userChipLabel"></span>
-          <button id="logoutBtn" title="ログアウト">ログアウト</button>
-        </span>
         <span class="save-flag"><span class="pip"></span><span id="saveFlag">保存済み</span></span>
         <button class="util-btn" id="refreshBtn"><span class="refresh-ic">🔄</span> 更新</button>
         <span id="lastUpdated" class="last-updated"></span>
@@ -575,12 +529,6 @@
   const GAS_URL = "https://script.google.com/macros/s/AKfycbxMCfPgBzwCIyIa-GKPYu8a8rfjGUSZpzS8QzD_ZygG98rTpisliEqqLYLdqZ6rBtRv/exec";
   // ▲▲▲ ここまで ▲▲▲
 
-  // ▼▼▼ ここにGoogle Cloud ConsoleでOAuthクライアントを作成した際のクライアントIDを貼り付けてください ▼▼▼
-  const OAUTH_CLIENT_ID = "PASTE_YOUR_OAUTH_CLIENT_ID_HERE";
-  // ログイン候補を絞り込むためのヒント（実際の強制はGoogle Cloud/Apps Script側の設定で行われます）
-  const ALLOWED_DOMAIN = "bridgeone.co.jp";
-  // ▲▲▲ ここまで ▲▲▲
-
   const DEFAULT_MEMBERS = ["力石","濱本","岩井","堀内","浅野","上清田","川上"];
   const ROWS = ["新規オーナー","新規役員","既存オーナー","既存役員"];
   const COLS = ["5億未満","5~10億","10億以上"];
@@ -609,8 +557,6 @@
   let saveInFlight = false; // true for the whole save round-trip, not just the debounce wait
   let dragMember = null;
   let bulkSelected = null; // Set of member names selected for bulk-apply; null = not yet initialized
-  let idToken = null;         // Google ID token for the signed-in user, attached to every API call
-  let currentUserEmail = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -660,7 +606,7 @@
   // Simple fetch wrapper with a couple of retries for transient network hiccups.
   async function apiGet(type, params){
     params = params || {};
-    const usp = new URLSearchParams(Object.assign({ type: type, idToken: idToken || "" }, params));
+    const usp = new URLSearchParams(Object.assign({ type: type }, params));
     const url = GAS_URL + "?" + usp.toString();
     let lastErr;
     for(let attempt=0; attempt<=2; attempt++){
@@ -668,15 +614,10 @@
         const res = await fetch(url);
         if(!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
-        if(data && data.error === "unauthorized"){
-          showLoginGate("ログインの有効期限が切れたか、権限がありません。再度ログインしてください。");
-          throw new Error("unauthorized");
-        }
         if(data && data.error) throw new Error(data.error);
         return data;
       }catch(e){
         lastErr = e;
-        if(e.message === "unauthorized") break; // don't retry an auth failure
         if(attempt<2) await new Promise(r=>setTimeout(r, 500));
       }
     }
@@ -687,7 +628,7 @@
   // satisfy from a browser running on a different origin (e.g. this app on Render).
   // doPost() on the Apps Script side still reads it fine via JSON.parse(e.postData.contents).
   async function apiPost(action, payload){
-    const body = JSON.stringify(Object.assign({ action: action, idToken: idToken }, payload));
+    const body = JSON.stringify(Object.assign({ action: action }, payload));
     let lastErr;
     for(let attempt=0; attempt<=2; attempt++){
       try{
@@ -698,15 +639,10 @@
         });
         if(!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
-        if(data && data.error === "unauthorized"){
-          showLoginGate("ログインの有効期限が切れたか、権限がありません。再度ログインしてください。");
-          throw new Error("unauthorized");
-        }
         if(data && data.ok === false) throw new Error(data.error || "save failed");
         return data;
       }catch(e){
         lastErr = e;
-        if(e.message === "unauthorized") break;
         if(attempt<2) await new Promise(r=>setTimeout(r, 500));
       }
     }
@@ -1814,76 +1750,8 @@
   $("refreshBtn").addEventListener("click", refreshCurrentView);
   $("connRetryBtn").addEventListener("click", refreshCurrentView);
 
-  // ---------- login (Google Sign-In, BridgeOne accounts only) ----------
-  function decodeJwt(token){
-    try{
-      const payload = token.split(".")[1];
-      const json = decodeURIComponent(
-        atob(payload.replace(/-/g,"+").replace(/_/g,"/"))
-          .split("").map(c=>"%"+("00"+c.charCodeAt(0).toString(16)).slice(-2)).join("")
-      );
-      return JSON.parse(json);
-    }catch(e){ return null; }
-  }
-
-  function showLoginGate(errorMsg){
-    const gate = $("loginGate"), root = $("appRoot");
-    if(gate) gate.style.display = "flex";
-    if(root) root.style.display = "none";
-    const err = $("loginError");
-    if(err) err.textContent = errorMsg || "";
-    idToken = null;
-    currentUserEmail = null;
-  }
-  function hideLoginGate(){
-    const gate = $("loginGate"), root = $("appRoot");
-    if(gate) gate.style.display = "none";
-    if(root) root.style.display = "";
-  }
-
-  function updateUserChip(){
-    const chip = $("userChip"), label = $("userChipLabel");
-    if(!chip || !label) return;
-    if(currentUserEmail){ chip.style.display = "flex"; label.textContent = currentUserEmail; }
-    else{ chip.style.display = "none"; }
-  }
-
-  function signOut(){
-    try{ if(window.google && google.accounts) google.accounts.id.disableAutoSelect(); }catch(e){}
-    showLoginGate();
-    updateUserChip();
-  }
-
-  async function startAppAfterLogin(){
-    updateUserChip();
-    try{ members = await loadMembers(); }catch(e){ members = DEFAULT_MEMBERS.slice(); }
-    try{ teams = await loadTeams(); }catch(e){ teams = DEFAULT_TEAMS.map(t=>({...t})); }
-    try{ assignments = await loadAssignments(); }catch(e){ assignments = {}; }
-    members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
-    activeMember = members[0] || null;
-    await renderAll();
-    updateLastUpdatedLabel();
-  }
-
-  function handleCredentialResponse(response){
-    const payload = decodeJwt(response.credential);
-    if(!payload || !payload.email){
-      showLoginGate("ログインに失敗しました。もう一度お試しください。");
-      return;
-    }
-    // Client-side domain check is just a fast UX hint — the real enforcement happens on
-    // the Apps Script side (and ideally via the OAuth consent screen's "Internal" setting),
-    // since anything checked only in the browser can be bypassed.
-    idToken = response.credential;
-    currentUserEmail = payload.email;
-    hideLoginGate();
-    startAppAfterLogin();
-  }
-
-  $("logoutBtn").addEventListener("click", signOut);
-
-  // ---------- boot ----------
-  (function boot(){
+  // ---------- init ----------
+  (async function init(){
     if(!GAS_URL || GAS_URL.indexOf("PASTE_YOUR") !== -1){
       document.body.innerHTML = `
         <div style="max-width:520px;margin:80px auto;padding:32px;font-family:sans-serif;text-align:center;
@@ -1899,26 +1767,13 @@
         </div>`;
       return;
     }
-    if(!OAUTH_CLIENT_ID || OAUTH_CLIENT_ID.indexOf("PASTE_YOUR") === 0){
-      showLoginGate("OAUTH_CLIENT_ID が未設定です。管理者(このアプリを構築した人)に連絡してください。");
-      return;
-    }
-    showLoginGate(); // show immediately; app data isn't loaded until sign-in succeeds
-    const tryInit = ()=>{
-      if(!(window.google && google.accounts && google.accounts.id)){
-        setTimeout(tryInit, 150); // Google Identity Services script may still be loading
-        return;
-      }
-      google.accounts.id.initialize({
-        client_id: OAUTH_CLIENT_ID,
-        callback: handleCredentialResponse,
-        hd: ALLOWED_DOMAIN || undefined
-      });
-      google.accounts.id.renderButton($("googleSignInBtn"), {
-        theme: "outline", size: "large", text: "signin_with", shape: "pill"
-      });
-    };
-    tryInit();
+    try{ members = await loadMembers(); }catch(e){ members = DEFAULT_MEMBERS.slice(); }
+    try{ teams = await loadTeams(); }catch(e){ teams = DEFAULT_TEAMS.map(t=>({...t})); }
+    try{ assignments = await loadAssignments(); }catch(e){ assignments = {}; }
+    members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
+    activeMember = members[0] || null;
+    await renderAll();
+    updateLastUpdatedLabel();
   })();
 })();
 </script>
