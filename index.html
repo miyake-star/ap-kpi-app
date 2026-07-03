@@ -394,6 +394,12 @@
     transition:transform .12s ease, color .12s ease, border-color .12s ease;
   }
   .move-btns button:hover{ color:var(--teal); border-color:var(--teal); transform:translateX(2px) scale(1.08); }
+  .del-member-btn{
+    width:20px; height:20px; border-radius:5px; border:1px solid var(--line); background:var(--bg);
+    color:var(--text-faint); font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:transform .12s ease, color .12s ease, border-color .12s ease; margin-left:2px;
+  }
+  .del-member-btn:hover{ color:var(--bad); border-color:var(--bad); transform:scale(1.1); }
   .drop-hint{
     font-size:11px; color:var(--text-faint); text-align:center; padding:14px 4px; border:1px dashed var(--line);
     border-radius:8px; transition:border-color .18s ease, color .18s ease;
@@ -498,7 +504,7 @@
       <button class="tab-btn" data-tab="teamProgress"><span class="ic">▤</span>チーム別進捗</button>
       <button class="tab-btn" data-tab="overview"><span class="ic">🏆</span>アポランキング</button>
       <button class="tab-btn" data-tab="detail"><span class="ic">✎</span>個別入力</button>
-      <button class="tab-btn" data-tab="teams"><span class="ic">⇄</span>チーム配置</button>
+      <button class="tab-btn" data-tab="teams"><span class="ic">⇄</span>チーム配置 <span style="font-size:10px;opacity:.7;">🔒</span></button>
       <button class="tab-btn" data-tab="targets"><span class="ic">🎯</span>目標一括設定 <span style="font-size:10px;opacity:.7;">🔒</span></button>
     </nav>
   </header>
@@ -538,12 +544,12 @@
     { id:"team2", name:"熊倉チーム", leader:"熊倉", color:"var(--gold)" }
   ];
 
-  // Simple client-side lock for the 目標一括設定 tab. This is NOT real security — anyone
-  // opening dev tools can read this constant or bypass the check — it's meant only to stop
-  // casual/accidental access by teammates, not a determined bad actor. Ask Claude to change
-  // this passcode any time.
-  const TARGETS_PASSCODE = "1051";
-  let targetsUnlocked = false; // resets on every page load, so re-entry is required each visit
+  // Simple client-side lock for the 目標一括設定 / チーム配置 tabs. This is NOT real
+  // security — anyone opening dev tools can read this constant or bypass the check — it's
+  // meant only to stop casual/accidental access by teammates, not a determined bad actor.
+  // Ask Claude to change this passcode any time.
+  const ADMIN_PASSCODE = "1051";
+  let adminUnlocked = false; // resets on every page load, so re-entry is required each visit; shared by both protected tabs
 
   let members = [];
   let teams = [];
@@ -1136,12 +1142,12 @@
   function renderTargetsTab(data, key){
     const disp = monthDisplay(current);
     $("pageTitle").textContent = "目標一括設定";
-    $("pageDesc").textContent = targetsUnlocked
+    $("pageDesc").textContent = adminUnlocked
       ? `${disp.yr}年${disp.mo}月 · メンバーごとの目標をまとめて編集`
       : `${disp.yr}年${disp.mo}月 · パスコードで保護されています`;
 
-    if(!targetsUnlocked){
-      renderTargetsLock();
+    if(!adminUnlocked){
+      renderLockScreen("このタブは目標値を一括で書き換えられるため、パスコードで保護しています。");
       return;
     }
 
@@ -1271,16 +1277,16 @@
     });
   }
 
-  // Passcode gate shown instead of the bulk-edit content until the correct code is entered.
-  // Unlock state is in-memory only (not persisted) — closing the tab or reloading the page
-  // requires re-entry, so the tab is protected again next time anyone opens the app.
-  function renderTargetsLock(){
+  // Passcode gate shown instead of the protected tab's content until the correct code is
+  // entered. Unlock state is in-memory only (not persisted) and shared by both protected
+  // tabs — closing the tab or reloading the page requires re-entry either way.
+  function renderLockScreen(message){
     $("detailArea").innerHTML = `
       <div class="card" style="max-width:420px; margin:40px auto 0; text-align:center;">
         <div style="font-size:40px; margin-bottom:8px;">🔒</div>
         <h3 style="margin:0 0 6px;">保護されています</h3>
         <div style="font-size:12.5px; color:var(--text-dim); margin-bottom:20px; line-height:1.7;">
-          このタブは目標値を一括で書き換えられるため、パスコードで保護しています。
+          ${escapeHtml(message)}
         </div>
         <div style="display:flex; flex-direction:column; gap:10px; align-items:stretch;">
           <input type="text" inputmode="numeric" id="lockInput" placeholder="パスコードを入力" autocomplete="off"
@@ -1304,8 +1310,8 @@
       const normalized = input.value
         .trim()
         .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
-      if(normalized === TARGETS_PASSCODE){
-        targetsUnlocked = true;
+      if(normalized === ADMIN_PASSCODE){
+        adminUnlocked = true;
         renderAll();
       } else {
         $("lockError").textContent = "パスコードが違います";
@@ -1321,6 +1327,12 @@
 
   // ---------- TAB: team assignment (drag & drop) ----------
   function renderTeamsTab(){
+    if(!adminUnlocked){
+      $("pageTitle").textContent = "チーム配置";
+      $("pageDesc").textContent = "パスコードで保護されています";
+      renderLockScreen("このタブはメンバーのチーム配置を変更できるため、パスコードで保護しています。");
+      return;
+    }
     $("pageTitle").textContent = "チーム配置";
     $("pageDesc").textContent = "カードをドラッグ、または矢印ボタンでチームを移動できます";
 
@@ -1421,16 +1433,20 @@
     document.querySelectorAll("#teamBoard .member-card").forEach(wireCard);
   }
 
-  function cardHtml(m, currentTeamId, cols){
+  function cardInnerHtml(m, currentTeamId, cols){
     const otherCols = cols.filter(c => (c.id||null) !== (currentTeamId||null));
     return `
-    <div class="member-card" draggable="true" data-m="${escapeAttr(m)}">
       <span class="rate-pip" style="background:var(--teal)"></span>
       <span class="nm">${escapeHtml(m)}</span>
       <div class="move-btns">
         ${otherCols.map(c=>`<button data-move="${escapeAttr(m)}" data-to="${c.id ?? ''}" title="${c.id? teams.find(t=>t.id===c.id).name : '未配属'}へ移動">${c.id? "→" : "×"}</button>`).join("")}
+        <button class="del-member-btn" data-del="${escapeAttr(m)}" title="このメンバーを削除">🗑</button>
       </div>
-    </div>`;
+    `;
+  }
+  function cardHtml(m, currentTeamId, cols){
+    return `
+    <div class="member-card" draggable="true" data-m="${escapeAttr(m)}">${cardInnerHtml(m, currentTeamId, cols)}</div>`;
   }
 
   function wireCard(card){
@@ -1444,6 +1460,12 @@
       btn.addEventListener("click", async e=>{
         e.stopPropagation();
         await moveMemberCard(btn.dataset.move, btn.dataset.to || null);
+      });
+    });
+    card.querySelectorAll("[data-del]").forEach(btn=>{
+      btn.addEventListener("click", e=>{
+        e.stopPropagation();
+        deleteMember(btn.dataset.del);
       });
     });
   }
@@ -1477,17 +1499,17 @@
 
       // rebuild this single card's inner content (its move-buttons differ per column) — same outer node
       const cols = [{id:null}, ...teams];
-      card.innerHTML = `
-        <span class="rate-pip" style="background:var(--teal)"></span>
-        <span class="nm">${escapeHtml(memberName)}</span>
-        <div class="move-btns">
-          ${cols.filter(c=>(c.id||null)!==(toTeamId||null)).map(c=>`<button data-move="${escapeAttr(memberName)}" data-to="${c.id ?? ''}" title="${c.id? teams.find(t=>t.id===c.id).name : '未配属'}へ移動">${c.id? "→" : "×"}</button>`).join("")}
-        </div>
-      `;
+      card.innerHTML = cardInnerHtml(memberName, toTeamId, cols);
       card.querySelectorAll("[data-move]").forEach(btn=>{
         btn.addEventListener("click", async e=>{
           e.stopPropagation();
           await moveMemberCard(btn.dataset.move, btn.dataset.to || null);
+        });
+      });
+      card.querySelectorAll("[data-del]").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+          e.stopPropagation();
+          deleteMember(btn.dataset.del);
         });
       });
 
