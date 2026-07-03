@@ -488,6 +488,7 @@
   let activeTab = "teamProgress";
   let monthCache = {};
   let saveTimer = null;
+  let saveInFlight = false; // true for the whole save round-trip, not just the debounce wait
   let dragMember = null;
   let bulkSelected = null; // Set of member names selected for bulk-apply; null = not yet initialized
 
@@ -665,12 +666,15 @@
     const local = monthCache[key] || {};
     const payload = {};
     dirty.forEach(m=>{ if(local[m]) payload[m] = local[m]; });
+    saveInFlight = true;
     try{
       await apiPost("saveMonth", { key: key, members: payload });
       dirtyMembersByMonth[key] = new Set();
       flagSaved();
     }catch(e){
       $("saveFlag").textContent = "保存に失敗しました";
+    } finally {
+      saveInFlight = false;
     }
   }
   function scheduleSave(key){
@@ -684,8 +688,9 @@
     if(saveTimer){
       clearTimeout(saveTimer);
       saveTimer = null;
-      flushMonthSave(monthKey(current));
+      return flushMonthSave(monthKey(current));
     }
+    return Promise.resolve();
   }
   window.addEventListener("beforeunload", flushPendingSave);
   document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") flushPendingSave(); });
@@ -1558,14 +1563,21 @@
     const force = !!opts.force;
     if(!force){
       if(isEditingSomething()) return;   // don't interrupt someone mid-input
-      if(saveTimer) return;               // an edit is queued to save — don't race it
+      if(saveTimer || saveInFlight) return; // an edit is queued or still being written — don't race it
     } else {
-      flushPendingSave(); // manual refresh: make sure our own pending edit goes out first
+      await flushPendingSave(); // manual refresh: make sure our own pending edit is fully saved first
     }
     const btn = $("refreshBtn");
     if(btn) btn.classList.add("spinning");
     try{
       const key = monthKey(current);
+      // Preserve any member data that's still marked dirty (edited locally but not yet
+      // confirmed saved) so a fetch that lands mid-save can't visually wipe it out.
+      const dirty = dirtyMembersByMonth[key];
+      const preserved = {};
+      if(dirty && dirty.size && monthCache[key]){
+        dirty.forEach(m=>{ if(monthCache[key][m]) preserved[m] = monthCache[key][m]; });
+      }
       delete monthCache[key]; // force a fresh read instead of using the cached copy
       members = await loadMembers();
       teams = await loadTeams();
@@ -1573,6 +1585,7 @@
       members.forEach(m=>{ if(!(m in assignments)) assignments[m] = null; });
       if(!activeMember || !members.includes(activeMember)) activeMember = members[0] || null;
       await loadMonth(key);
+      Object.keys(preserved).forEach(m=>{ monthCache[key][m] = preserved[m]; });
       await renderAll();
       updateLastUpdatedLabel();
     }catch(e){
